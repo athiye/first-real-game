@@ -1,3 +1,6 @@
+
+// AI stuff, I am NOT messing with this
+
 export function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
 }

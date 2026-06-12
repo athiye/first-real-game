@@ -1,5 +1,7 @@
 import { normalize } from './math.js';
 
+
+// pretty intuitive
 export const KEY_MAP = {
     KeyW: 'up',
     KeyS: 'down',
@@ -15,22 +17,12 @@ export const KEY_MAP = {
     ShiftRight: 'shift',
     KeyJ: 'shoot',
     KeyK: 'pass',
-    KeyE: 'lob',
-    KeyL: 'dribble',
     Space: 'stepback',
     Tab: 'switch',
-    KeyR: 'reset',
-    KeyP: 'pause',
-    Digit1: 'offMakeDown',
-    Digit2: 'offMakeUp',
-    Digit3: 'onMissDown',
-    Digit4: 'onMissUp',
-    Digit5: 'stepbackDown',
-    Digit6: 'stepbackUp',
-    Digit7: 'threeArcDown',
-    Digit8: 'threeArcUp'
 };
 
+
+// stuff to make sure the key is actually down and things like that
 export class Input {
     down = new Set();
     pressed = new Set();

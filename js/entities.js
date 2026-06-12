@@ -1,6 +1,7 @@
 import { COURT } from './config.js';
 import { rand } from './math.js';
 
+// starting spots for all characters
 export const RESET_SPOTS = {
     PG: { x: 260, y: 154 },
     SG: { x: 321, y: 101 },
@@ -9,9 +10,12 @@ export const RESET_SPOTS = {
     C:  { x: 137, y: 163 }
 };
 
+// idk what this is lol?
 export function makeCooldowns() {
     return { shoot: 0, pass: 0, lob: 0, dribble: 0, stepback: 0 };
 }
+
+
 
 export function makeBall(x = 260, y = COURT.centerY) {
     return {

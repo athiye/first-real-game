@@ -1,6 +1,8 @@
 import { VW, VH, DISPLAY_W, DISPLAY_H, COURT, GAME, COLORS } from './config.js';
 import { clamp, lerp } from './math.js';
 
+// all AI stuff for art dw about it
+
 export class Renderer {
     canvas;
     screen;
@@ -385,13 +387,11 @@ export class Renderer {
         let footR      = Math.round(runWave2 * moving);
         let armRaise   = 0;
         let torsoLean  = 0;
-        if (p.hasBall && (p.animState === 'dribble' || p.animState === 'cross')) {
+        if (p.hasBall && (p.animState === 'dribble')) {
             bodyBob += bounceWave > 0 ? 0 : 1;
             armL += bounceWave > 0 ? 1 : -1;
             armR += bounceWave > 0 ? -1 : 1;
         }
-        if (p.animState === 'cross')
-            torsoShift += Math.round(2 * Math.sin(actionT * Math.PI));
         if (p.animState === 'stepback') {
             torsoShift -= Math.round(4 * Math.sin(actionT * Math.PI));
             torsoLean  -= dir;

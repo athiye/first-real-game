@@ -1,0 +1,8 @@
+- rebind controls
+    - remove "cross" or any form of dribbling, also remove lob for now?
+    - j to shoot, space to drive, k to step back, f to pass
+
+- figure out:
+    - actionProgress
+    - startAction
+    - 

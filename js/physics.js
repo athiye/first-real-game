@@ -1,15 +1,17 @@
-import { COURT, GAME } from './config.js';
+import { COURT, GAME, SHOT_ODDS } from './config.js';
 import { clamp, lerp, smoothstep, dist, normalize, rand } from './math.js';
 import { RESET_SPOTS, rim } from './entities.js';
 
 export const HOOP_Z = 13;
 export const RIM_RADIUS = 7.5;
 
+// net stuff
 export function triggerNet(state, strength, side) {
     state.netTimer = Math.max(state.netTimer, strength);
     state.netSide = clamp(side, -1, 1);
 }
 
+// what happens when a make is guaranteed. 
 export function finishMake(state, style, side) {
     const b = state.ball;
     state.makes += 1;
@@ -32,6 +34,7 @@ export function finishMake(state, style, side) {
     state.resetTimer = GAME.resetDelay;
 }
 
+// what happens if it rolls into the rim
 export function startRimRoll(state) {
     const b = state.ball;
     const hoopX = rim().x + 2;
@@ -49,17 +52,20 @@ export function startRimRoll(state) {
     state.screenShake = 0.12;
 }
 
+// 
 export function actionProgress(p) {
     if (p.actionDuration <= 0) return 1;
     return clamp(p.actionElapsed / p.actionDuration, 0, 1);
 }
 
+// 
 export function startAction(p, state, duration) {
     p.animState = state;
     p.actionElapsed = 0;
     p.actionDuration = duration;
 }
 
+// 
 export function updatePlayerTimers(p, dt) {
     p.anim += dt;
     p.actionElapsed += dt;
@@ -69,7 +75,7 @@ export function updatePlayerTimers(p, dt) {
     if (p.actionElapsed >= p.actionDuration) {
         if (p.animState === 'shoot' || p.animState === 'turnshot' || p.animState === 'pass' ||
             p.animState === 'catch' || p.animState === 'layup' || p.animState === 'dunk' ||
-            p.animState === 'cross' || p.animState === 'stepback' || p.animState === 'block' ||
+            p.animState === 'stepback' || p.animState === 'block' ||
             p.animState === 'drive') {
             p.animState = p.hasBall ? 'dribble' : 'idle';
             p.actionElapsed = 0;
@@ -82,11 +88,13 @@ export function updatePlayerTimers(p, dt) {
     }
 }
 
+// makes sure player can't leave court
 export function keepOnCourt(p) {
     p.x = clamp(p.x, COURT.playableLeft, COURT.playableRight);
     p.y = clamp(p.y, COURT.playableTop, COURT.playableBottom);
 }
 
+// resets everything once a shot is made, everything reset
 export function resetTraining(state, message = 'TRAINING GROUND') {
     for (const p of state.players) {
         const spot = RESET_SPOTS[p.role];
@@ -270,7 +278,7 @@ export function beginShot(state, shooter, charge01, forcedFinish = false, select
     b.y = b.fromY;
     b.z = b.fromZ;
     b.elapsed = 0;
-    b.duration = dunk ? 0.30 : layup ? 0.36 : clamp(GAME.shotBaseDuration + d / 900, 0.5, 0.82);
+    b.duration = dunk ? SHOT_ODDS.dunkDuration : layup ? SHOT_ODDS.layupDuration : clamp(GAME.shotBaseDuration + d / 900, 0.5, 0.82);
     b.rimHit = false;
     b.touchedBoard = false;
     b.rimContacts = 0;
@@ -278,32 +286,32 @@ export function beginShot(state, shooter, charge01, forcedFinish = false, select
     b.shotType = dunk ? 'dunk' : layup ? 'layup' : 'jumper';
     b.floater = floater && b.shotType === 'jumper';
     b.arcScale = b.shotType === 'jumper'
-        ? clamp(state.shotArcPower + rand(-0.10, 0.10), 0.35, 1.25)
+        ? clamp(state.shotArcPower + rand(-SHOT_ODDS.shotArcNoise, SHOT_ODDS.shotArcNoise), SHOT_ODDS.shotArcMin, SHOT_ODDS.shotArcMax)
         : 1;
     const error = charge01 - GAME.greenCenter;
     const absError = Math.abs(error);
-    const slightWindow = dunk ? 0.22 : layup ? 0.16 : d < 70 ? 0.12 : isThree ? 0.08 : 0.10;
+    const slightWindow = dunk ? SHOT_ODDS.dunkTimingWindow : layup ? SHOT_ODDS.layupTimingWindow : d < 70 ? SHOT_ODDS.closeJumpTimingWindow : isThree ? SHOT_ODDS.threePointTimingWindow : SHOT_ODDS.jumpTimingWindow;
     const overshot = error > slightWindow;
     const short = error < -slightWindow;
-    const severeMistime = clamp((absError - (slightWindow + 0.08)) / 0.32, 0, 1);
-    const timingScore = 1 - clamp(absError / (slightWindow + 0.30), 0, 1);
-    const movePenalty = clamp(Math.hypot(shooter.vx, shooter.vy) / 500, 0, 0.1);
-    const perfectBase = dunk ? 0.995 : layup ? 0.985 : d < 70 ? 0.90 : isThree ? 0.56 : 0.74;
-    const onTargetMake = clamp(perfectBase - state.onMissChance - movePenalty * 0.75, 0.02, 0.995);
+    const severeMistime = clamp((absError - (slightWindow + SHOT_ODDS.timingMistimeOffset)) / SHOT_ODDS.timingMistimeScale, 0, 1);
+    const timingScore = 1 - clamp(absError / (slightWindow + SHOT_ODDS.timingScoreRange), 0, 1);
+    const movePenalty = clamp(Math.hypot(shooter.vx, shooter.vy) / SHOT_ODDS.movePenaltySpeedDivisor, 0, SHOT_ODDS.movePenaltyMax);
+    const perfectBase = dunk ? SHOT_ODDS.dunkPerfectMakeChance : layup ? SHOT_ODDS.layupPerfectMakeChance : d < 70 ? SHOT_ODDS.closeJumpPerfectMakeChance : isThree ? SHOT_ODDS.threePointPerfectMakeChance : SHOT_ODDS.jumpPerfectMakeChance;
+    const onTargetMake = clamp(perfectBase - state.onMissChance - movePenalty * SHOT_ODDS.movePenaltyScale, SHOT_ODDS.perfectOnTargetMin, SHOT_ODDS.makeChanceMaxDunk);
     let makeChance;
     if (dunk) {
-        makeChance = 0.995;
+        makeChance = SHOT_ODDS.dunkPerfectMakeChance;
     } else if (layup) {
-        const layupFalloff = clamp((absError - slightWindow) / 0.26, 0, 1);
-        makeChance = clamp(onTargetMake - layupFalloff * 0.80, 0.05, 0.99);
+        const layupFalloff = clamp((absError - slightWindow) / SHOT_ODDS.layupFalloffRange, 0, 1);
+        makeChance = clamp(onTargetMake - layupFalloff * SHOT_ODDS.layupFalloffPenalty, SHOT_ODDS.layupMinMakeChance, SHOT_ODDS.layupMaxMakeChance);
     } else {
-        const falloffRange = d < 70 ? 0.26 : isThree ? 0.18 : 0.22;
+        const falloffRange = d < 70 ? SHOT_ODDS.closeShotFalloffRange : isThree ? SHOT_ODDS.threePointFalloffRange : SHOT_ODDS.normalShotFalloffRange;
         const offSeverity = clamp((absError - slightWindow) / falloffRange, 0, 1);
         const sharpFalloff = offSeverity * offSeverity;
-        const bailout = state.offMakeChance * (isThree ? 0.72 : d < 70 ? 1.25 : 1.0);
-        makeChance = clamp(onTargetMake * (1 - sharpFalloff) + bailout * sharpFalloff, 0.005, 0.99);
+        const bailout = state.offMakeChance * (isThree ? SHOT_ODDS.threePointBailoutScale : d < 70 ? SHOT_ODDS.closeShotBailoutScale : SHOT_ODDS.normalShotBailoutScale);
+        makeChance = clamp(onTargetMake * (1 - sharpFalloff) + bailout * sharpFalloff, SHOT_ODDS.makeChanceMin, SHOT_ODDS.makeChanceMax);
     }
-    makeChance = clamp(makeChance + rand(-0.012, 0.012), 0.005, dunk ? 0.995 : 0.99);
+    makeChance = clamp(makeChance + rand(-SHOT_ODDS.makeNoiseVariance, SHOT_ODDS.makeNoiseVariance), SHOT_ODDS.makeChanceMin, dunk ? SHOT_ODDS.makeChanceMaxDunk : SHOT_ODDS.makeChanceMax);
     b.quality = makeChance;
     b.make = Math.random() < makeChance;
     state.attempts += 1;
@@ -311,25 +319,25 @@ export function beginShot(state, shooter, charge01, forcedFinish = false, select
     if (dunk) {
         b.shotStyle = 'swish';
     } else if (layup) {
-        if (b.make) b.shotStyle = roll < 0.72 ? 'bank' : roll < 0.93 ? 'rim' : 'swish';
-        else        b.shotStyle = roll < 0.56 ? 'bank' : roll < 0.88 ? 'rim' : 'miss';
+        if (b.make) b.shotStyle = roll < SHOT_ODDS.layupMakeBankChance ? 'bank' : roll < SHOT_ODDS.layupMakeRimChance ? 'rim' : 'swish';
+        else        b.shotStyle = roll < SHOT_ODDS.layupMissBankChance ? 'bank' : roll < SHOT_ODDS.layupMissRimChance ? 'rim' : 'miss';
     } else if (b.make) {
-        if (overshot) b.shotStyle = roll < 0.44 ? 'bank' : roll < 0.78 ? 'rim' : 'swish';
-        else if (short) b.shotStyle = roll < 0.58 ? 'rim' : roll < 0.9 ? 'swish' : 'bank';
-        else            b.shotStyle = roll < 0.62 ? 'swish' : roll < 0.86 ? 'rim' : 'bank';
+        if (overshot) b.shotStyle = roll < SHOT_ODDS.overshotMakeBankChance ? 'bank' : roll < SHOT_ODDS.overshotMakeRimChance ? 'rim' : 'swish';
+        else if (short) b.shotStyle = roll < SHOT_ODDS.shortMakeRimChance ? 'rim' : roll < SHOT_ODDS.shortMakeSwishChance ? 'swish' : 'bank';
+        else            b.shotStyle = roll < SHOT_ODDS.normalMakeSwishChance ? 'swish' : roll < SHOT_ODDS.normalMakeRimChance ? 'rim' : 'bank';
     } else {
-        if (overshot) b.shotStyle = roll < 0.46 ? 'bank' : roll < 0.88 ? 'rim' : 'miss';
-        else if (short) b.shotStyle = roll < 0.72 ? 'rim' : roll < 0.94 ? 'miss' : 'bank';
-        else            b.shotStyle = roll < 0.68 ? 'rim' : roll < 0.82 ? 'bank' : 'miss';
+        if (overshot) b.shotStyle = roll < SHOT_ODDS.overshotMissBankChance ? 'bank' : roll < SHOT_ODDS.overshotMissRimChance ? 'rim' : 'miss';
+        else if (short) b.shotStyle = roll < SHOT_ODDS.shortMissRimChance ? 'rim' : roll < SHOT_ODDS.shortMissMissChance ? 'miss' : 'bank';
+        else            b.shotStyle = roll < SHOT_ODDS.normalMissRimChance ? 'rim' : roll < SHOT_ODDS.normalMissBankChance ? 'bank' : 'miss';
     }
-    const powerBias = clamp(error / 0.28, -1, 1);
-    const sideNoise = rand(-1, 1) * (2.0 + absError * 13 + (isThree ? 2.5 : 0));
+    const powerBias = clamp(error / SHOT_ODDS.accErrorPowerBiasDivisor, -1, 1);
+    const sideNoise = rand(-1, 1) * (SHOT_ODDS.sideNoiseBase + absError * SHOT_ODDS.sideNoiseErrorScale + (isThree ? SHOT_ODDS.sideNoiseThreeBonus : 0));
     if (b.shotStyle === 'bank') {
         b.targetX = COURT.backboardX + 2 + rand(-1, 1);
         b.targetY = clamp(hoopY + sideNoise * 0.75 + (short ? rand(-3, 3) : 0), COURT.paintTop + 8, COURT.paintBottom - 8);
     } else if (b.shotStyle === 'rim') {
         if (short) {
-            const sideRim = Math.random() < 0.62;
+            const sideRim = Math.random() < SHOT_ODDS.shortRimSideChoiceChance;
             if (sideRim) {
                 b.targetX = hoopX + (b.make ? rand(0.5, 2.5) : rand(1.5, 4.5));
                 b.targetY = hoopY + (Math.random() < 0.5 ? -1 : 1) * rand(7.5, 13.5);
@@ -338,7 +346,7 @@ export function beginShot(state, shooter, charge01, forcedFinish = false, select
                 b.targetY = hoopY + rand(-4.0, 4.0);
             }
         } else if (overshot) {
-            const backSide = Math.random() < 0.4;
+            const backSide = Math.random() < SHOT_ODDS.rimBackSideChoiceChance;
             b.targetX = hoopX - (b.make ? rand(1.0, 3.0) : rand(4.5, 8.5));
             b.targetY = hoopY + (backSide ? (Math.random() < 0.5 ? -1 : 1) * rand(5.0, 10.0) : rand(-4.0, 4.0));
         } else {
@@ -358,7 +366,7 @@ export function beginShot(state, shooter, charge01, forcedFinish = false, select
         }
     } else {
         b.targetX = hoopX + rand(-1.5, 1.5) - powerBias * 1.4;
-        b.targetY = hoopY + rand(-1.8, 1.8) + sideNoise * 0.12;
+        b.targetY = hoopY + rand(-1.8, 1.8) + sideNoise * SHOT_ODDS.sideNoiseTargetNoiseScale;
     }
     if (dunk) {
         b.shotStyle = 'swish';
@@ -366,7 +374,7 @@ export function beginShot(state, shooter, charge01, forcedFinish = false, select
         b.targetY = hoopY + rand(-0.6, 0.6);
         b.duration = 0.30;
     } else if (layup) {
-        const side = Math.random() < 0.5 ? -1 : 1;
+        const side = Math.random() < SHOT_ODDS.layupSideChoiceChance ? -1 : 1;
         if (b.shotStyle === 'bank') {
             b.targetX = COURT.backboardX + rand(1.0, 3.0);
             b.targetY = clamp(hoopY + side * rand(4.0, 11.0) + (overshot ? rand(-2, 2) : 0), COURT.paintTop + 8, COURT.paintBottom - 8);
@@ -414,7 +422,7 @@ export function updateTeammates(state, dt) {
         if (p.controlled) continue;
         p.cutTimer -= dt;
         if (p.cutTimer <= 0) {
-            if (holder && p.role !== 'PG' && Math.random() < 0.44) {
+            if (holder && p.role !== 'PG' && Math.random() < SHOT_ODDS.teammateCutToRimChance) {
                 p.targetX = clamp(COURT.rim.x + rand(35, 145), COURT.playableLeft, COURT.playableRight);
                 p.targetY = clamp(p.homeY + rand(-24, 24), COURT.playableTop, COURT.playableBottom);
             } else {

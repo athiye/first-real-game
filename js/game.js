@@ -125,40 +125,7 @@ function createInitialState() {
 }
 
 function update(dt) {
-    if (input.justPressed('pause')) state.paused = !state.paused;
-    if (input.justPressed('reset')) resetTraining(state, 'RESET');
-    if (input.justPressed('offMakeDown')) {
-        state.offMakeChance = clamp(Number((state.offMakeChance - 0.01).toFixed(3)), 0, 0.20);
-        state.message = { text: `OFF MAKE ${Math.round(state.offMakeChance * 100)}%`, ttl: 0.7 };
-    }
-    if (input.justPressed('offMakeUp')) {
-        state.offMakeChance = clamp(Number((state.offMakeChance + 0.01).toFixed(3)), 0, 0.20);
-        state.message = { text: `OFF MAKE ${Math.round(state.offMakeChance * 100)}%`, ttl: 0.7 };
-    }
-    if (input.justPressed('onMissDown')) {
-        state.onMissChance = clamp(Number((state.onMissChance - 0.01).toFixed(3)), 0, 0.30);
-        state.message = { text: `ON MISS ${Math.round(state.onMissChance * 100)}%`, ttl: 0.7 };
-    }
-    if (input.justPressed('onMissUp')) {
-        state.onMissChance = clamp(Number((state.onMissChance + 0.01).toFixed(3)), 0, 0.30);
-        state.message = { text: `ON MISS ${Math.round(state.onMissChance * 100)}%`, ttl: 0.7 };
-    }
-    if (input.justPressed('stepbackDown')) {
-        state.stepbackPower = clamp(Number((state.stepbackPower - 0.05).toFixed(2)), 0.50, 1.80);
-        state.message = { text: `STEPBACK ${Math.round(state.stepbackPower * 100)}%`, ttl: 0.7 };
-    }
-    if (input.justPressed('stepbackUp')) {
-        state.stepbackPower = clamp(Number((state.stepbackPower + 0.05).toFixed(2)), 0.50, 1.80);
-        state.message = { text: `STEPBACK ${Math.round(state.stepbackPower * 100)}%`, ttl: 0.7 };
-    }
-    if (input.justPressed('threeArcDown')) {
-        state.threeArcPower = clamp(Number((state.threeArcPower - 0.05).toFixed(2)), 0.70, 1.55);
-        state.message = { text: `3PT ARC ${Math.round(state.threeArcPower * 100)}%`, ttl: 0.7 };
-    }
-    if (input.justPressed('threeArcUp')) {
-        state.threeArcPower = clamp(Number((state.threeArcPower + 0.05).toFixed(2)), 0.70, 1.55);
-        state.message = { text: `3PT ARC ${Math.round(state.threeArcPower * 100)}%`, ttl: 0.7 };
-    }
+    
     if (state.paused) return;
     state.message.ttl = Math.max(0, state.message.ttl - dt);
     state.screenShake = Math.max(0, state.screenShake - dt * 3);
