@@ -171,13 +171,9 @@ export class Renderer {
                 this.px(x + 1, y + 1, 2, 2, skin);
             }
         }
-        this.text('NEW YORK', 63, COURT.bottom - 59, COLORS.white, 8, 'center');
+        // removed arena text
         const ctx = this.ctx;
-        ctx.save();
-        ctx.translate(74, COURT.centerY + 14);
-        ctx.rotate(-Math.PI / 2);
-        this.text('EMPIRE', 0, 0, COLORS.white, 10, 'center');
-        ctx.restore();
+        // removed vertical arena text
     }
 
     drawCourt(state) {
@@ -229,7 +225,7 @@ export class Renderer {
         const lab = this.project(398, 175);
         const tr  = this.project(395, 238);
         this.text('HI', mp.x, mp.y, '#2c63aa', 30);
-        this.text('HAVE FUN', lab.x, lab.y, '#2c63aa', 13);
+        this.text('HAVE FUN!', lab.x, lab.y, '#2c63aa', 13);
         this.text('COOL GAME', tr.x, tr.y, '#b84a3b', 10);
     }
 
