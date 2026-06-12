@@ -14,7 +14,7 @@ if (!canvas) throw new Error('Missing #game canvas');
 const input = new Input();
 const renderer = new Renderer(canvas);
 const state = createInitialState();
-resetTraining(state, 'TRAINING GROUND');
+resetTraining(state, 'COOL GAME');
 
 let last = performance.now();
 

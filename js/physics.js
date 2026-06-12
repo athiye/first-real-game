@@ -95,7 +95,7 @@ export function keepOnCourt(p) {
 }
 
 // resets everything once a shot is made, everything reset
-export function resetTraining(state, message = 'TRAINING GROUND') {
+export function resetTraining(state, message = 'COOL GAME') {
     for (const p of state.players) {
         const spot = RESET_SPOTS[p.role];
         p.x = spot.x;

@@ -228,9 +228,9 @@ export class Renderer {
         const mp  = this.project(398, 153);
         const lab = this.project(398, 175);
         const tr  = this.project(395, 238);
-        this.text('MP', mp.x, mp.y, '#2c63aa', 30);
-        this.text('LAB', lab.x, lab.y, '#2c63aa', 13);
-        this.text('TRAINING', tr.x, tr.y, '#b84a3b', 10);
+        this.text('HI', mp.x, mp.y, '#2c63aa', 30);
+        this.text('HAVE FUN', lab.x, lab.y, '#2c63aa', 13);
+        this.text('COOL GAME', tr.x, tr.y, '#b84a3b', 10);
     }
 
     drawHoopBack() {
@@ -285,7 +285,7 @@ export class Renderer {
         this.outlineRect(268, 6, 74, 18, '#1d2440');
         this.outlineRect(346, 6, 164, 18, '#18213b');
         this.text(`MAKE ${String(state.makes).padStart(2, '0')}`, 38, 19, COLORS.white, 8);
-        this.text('TRAINING', 133, 19, COLORS.white, 8);
+        this.text('COOL GAME', 133, 19, COLORS.white, 8);
         this.text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
         this.text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
