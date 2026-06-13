@@ -388,7 +388,7 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     const contestDist = blocking && isFinite(def.blockContestDist)
         ? def.blockContestDist
         : dist(shooter, def);
-    state.lastContest = clamp(1 - contestDist / GAME.contestMaxDistance, 0, 1);
+    state.lastContest = clamp(1 - contestDist / state.contestMaxDistance, 0, 1);
 
     // --- Shot style determination ---
     // Decides whether the shot is a swish, bank (off the backboard), rim, or miss.

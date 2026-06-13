@@ -19,6 +19,8 @@ export const KEY_MAP = {
     KeyK: 'pass',
     Space: 'stepback',
     Tab: 'switch',
+    Minus: 'contestDown', // '-' : shrink the shot-contest range (tuning knob)
+    Equal: 'contestUp',   // '=' : grow the shot-contest range (tuning knob)
 };
 
 

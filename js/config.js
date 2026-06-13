@@ -92,6 +92,8 @@ export const GAME = {
 
     // Shot contest: a defender within this many pixels of the shooter produces some
     // contest (1 = right on top of them, 0 = this far away or further = wide open).
+    // This is just the STARTING value — adjust it live in-game with the '-' and '='
+    // keys (shown in the HUD as "MAX"), then copy the number you like back here.
     contestMaxDistance: 60
 };
 

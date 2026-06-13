@@ -284,7 +284,7 @@ export class Renderer {
         this.text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
         this.text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
-        this.text(`CONTEST ${Math.round(state.lastContest * 100)}%`, 428, 19, COLORS.white, 6);
+        this.text(`CONTEST ${Math.round(state.lastContest * 100)}% MAX ${state.contestMaxDistance}`, 428, 19, COLORS.white, 6);
         this.px(146, 26, 72, 3, COLORS.hudBlue2);
         this.text('PRACTICE GYM', 182, 29, COLORS.white, 4);
         if (state.message.ttl > 0) {
