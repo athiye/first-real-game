@@ -306,7 +306,7 @@ export class Renderer {
         text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
         text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
-        text(`DEF DIST ${Math.round(state.shooterDist)}px`, 384, 19, COLORS.white, 6);
+        text(`ANGLE  ${Math.round(state.contestAngle)}px`, 384, 19, COLORS.white, 6);
         text(`CONTEST ${Math.round(state.lastContest)}%`, 467, 19, COLORS.white, 8); 
         rect(146, 26, 72, 3, COLORS.hudBlue2);
         text('PRACTICE GYM', 182, 29, COLORS.white, 4);
