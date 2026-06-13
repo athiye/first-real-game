@@ -86,7 +86,7 @@ export const GAME = {
     //                 already moving toward the ball, as a fraction of sprint speed)
     // ...floored at blockLungeMin so a defender running the wrong way still twitches.
     blockLungeBase: 30,      // lunge speed from a dead standstill
-    blockLungeMomentum: 30,  // bonus lunge speed when already sprinting at the ball
+    blockLungeMomentum: 60,  // bonus lunge speed when already sprinting at the ball
     blockLungeMin: 18,       // lowest possible lunge speed (used when moving away)
     blockDuration: 0.3,      // how long the committed block lunge lasts
 
