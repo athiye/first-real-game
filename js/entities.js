@@ -10,12 +10,11 @@ export const RESET_SPOTS = {
     C:  { x: 137, y: 163 }
 };
 
-// idk what this is lol?
+// Cooldown timers (in seconds) for a player's actions. Each counts down to 0 so the
+// player can't spam the same move every frame. updatePlayerTimers() ticks them down.
 export function makeCooldowns() {
-    return { shoot: 0, pass: 0, lob: 0, dribble: 0, stepback: 0 };
+    return { shoot: 0, pass: 0, stepback: 0 };
 }
-
-
 
 export function makeBall(x = 260, y = COURT.centerY) {
     return {
@@ -38,7 +37,6 @@ export function makeBall(x = 260, y = COURT.centerY) {
         rimHit: false,
         shotStyle: 'miss',
         shotType: 'jumper',
-        floater: false,
         arcScale: 0.8,
         touchedBoard: false,
         rimContacts: 0

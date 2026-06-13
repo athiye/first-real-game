@@ -73,10 +73,26 @@ export const GAME = {
     // Passing.
     passDurationMin: 0.15,  // shortest possible pass flight time (idk AI did this)
     passDurationMax: 0.42,  // longest possible pass flight time (idk AI did this)
-    lobDuration: 0.76,      // flight duration for lob passes
 
-    shotBaseDuration: 0.58, // base flight time of a jump shot 
-    resetDelay: 0.85        // pause after a made basket before reset
+    shotBaseDuration: 0.58, // base flight time of a jump shot
+    resetDelay: 0.85,       // pause after a made basket before reset
+
+    // Stepback: how hard the ball handler explodes away from the hoop.
+    stepbackForce: 230,
+
+    // Defender block lunge. When the defender presses block they leap toward the
+    // ball; how far they travel depends on their momentum at that moment:
+    //   lunge speed = blockLungeBase + blockLungeMomentum * (how fast they were
+    //                 already moving toward the ball, as a fraction of sprint speed)
+    // ...floored at blockLungeMin so a defender running the wrong way still twitches.
+    blockLungeBase: 60,      // lunge speed from a dead standstill
+    blockLungeMomentum: 90,  // bonus lunge speed when already sprinting at the ball
+    blockLungeMin: 18,       // lowest possible lunge speed (used when moving away)
+    blockDuration: 0.5,      // how long the committed block lunge lasts
+
+    // Shot contest: a defender within this many pixels of the shooter produces some
+    // contest (1 = right on top of them, 0 = this far away or further = wide open).
+    contestMaxDistance: 60
 };
 
 // Shot difficulty. Variable names intuitive
@@ -87,7 +103,7 @@ export const SHOT_ODDS = {
     // How high jump shots arc (average, there is variation)
     jumperArcHeight: 0.80,
 
-    // Make probability baselines by shot type / range.
+    // Make probabilities for perfect shots
     dunkPerfectMakeChance: 0.95,
     layupPerfectMakeChance: 0.985,
     closeJumpPerfectMakeChance: 0.90,

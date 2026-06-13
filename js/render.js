@@ -197,11 +197,10 @@ export class Renderer {
         this.polygon(this.projectedRect(COURT.paintLeft, COURT.paintTop, COURT.paintLeft + 8, COURT.paintBottom), COLORS.paintDark);
         this.polyline(this.projectedArc(COURT.freeThrowX, COURT.centerY, 26, -Math.PI / 2, Math.PI / 2, 36), COLORS.line, 2);
         this.polyline(this.projectedArc(COURT.freeThrowX, COURT.centerY, 26, Math.PI / 2, Math.PI * 1.5, 36), COLORS.line, 2, [4, 4]);
-        // 3PT arc: radius scales with state.threeArcPower, corner join re-solves to stay tangent.
+        // 3PT arc: a true 23.75 ft circle around the rim; the corner join stays tangent.
         const feetPerPx = (COURT.bottom - COURT.top) / 50;
-        const baseRadiusFt = 23.75;
         const cornerDistFt = 22;
-        const radiusFt = baseRadiusFt * state.threeArcPower;
+        const radiusFt = 23.75;
         const rx = radiusFt * feetPerPx;
         const ry = radiusFt * feetPerPx;
         const cornerOffsetY = cornerDistFt * feetPerPx;
@@ -285,7 +284,7 @@ export class Renderer {
         this.text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
         this.text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
-        this.text(`OFF ${Math.round(state.offMakeChance * 100)} ONM ${Math.round(state.onMissChance * 100)} STP ${Math.round(state.stepbackPower * 100)} 3PT ${Math.round(state.threeArcPower * 100)}`, 428, 19, COLORS.white, 6);
+        this.text(`CONTEST ${Math.round(state.lastContest * 100)}%`, 428, 19, COLORS.white, 6);
         this.px(146, 26, 72, 3, COLORS.hudBlue2);
         this.text('PRACTICE GYM', 182, 29, COLORS.white, 4);
         if (state.message.ttl > 0) {
