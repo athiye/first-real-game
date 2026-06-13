@@ -399,8 +399,10 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     const contestDist = blocking && isFinite(def.blockContestDist)
         ? def.blockContestDist
         : dist(shooter, def);
-    // Then run that distance through the tunable contest curve.
-    state.lastContestDist = contestDist;
+    // Then run that distance through the tunable contest curve. Freeze the HUD's
+    // distance readout at this release distance (the ball handler is gone now, so the
+    // live updater in game.js won't touch it until the next possession).
+    state.shooterDist = contestDist;
     state.lastContest = contestFromDistance(contestDist);
 
     // --- Shot style determination ---

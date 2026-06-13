@@ -131,7 +131,7 @@ function createInitialState() {
         netTimer: 0,              // how much the net is currently swaying
         netSide: 0,               // which direction the net sways
         lastContest: 0,           // how contested the most recent shot was (0 = wide open, 1 = smothered)
-        lastContestDist: 0,       // raw distance (px) the defender was from the shooter on that shot
+        shooterDist: 0,           // live distance (px) from the defender to the current ball handler
         paused: false
     };
 }
@@ -188,7 +188,16 @@ function update(dt) {
     // Push overlapping players apart so they don't occupy the same space.
     resolveSpacing([...state.players, state.defender]);
     trackBlockContest();
+    updateShooterDistance();
     updateBall(state, dt);
+}
+
+// Keeps the HUD's "DEF DIST" readout live: while someone is holding the ball, it
+// always shows how far the defender currently is from that ball handler. (Once the
+// ball leaves a player's hands on a shot, beginShot freezes it at the release distance.)
+function updateShooterDistance() {
+    const holder = state.players.find(p => p.hasBall);
+    if (holder) state.shooterDist = dist(holder, state.defender);
 }
 
 // While the defender is mid-block, remember the closest they get to the ball
