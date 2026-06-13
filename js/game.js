@@ -131,7 +131,7 @@ function createInitialState() {
         netTimer: 0,              // how much the net is currently swaying
         netSide: 0,               // which direction the net sways
         lastContest: 0,           // how contested the most recent shot was (0 = wide open, 1 = smothered)
-        contestMaxDistance: GAME.contestMaxDistance, // live-tunable contest range (px); starts at the config default, adjust with -/=
+        lastContestDist: 0,       // raw distance (px) the defender was from the shooter on that shot
         paused: false
     };
 }
@@ -145,10 +145,6 @@ function createInitialState() {
 //   4. Otherwise, process player input, move teammates, apply physics to everyone,
 //      stop players from overlapping, and move the ball.
 function update(dt) {
-    // Live tuning: '-' and '=' shrink/grow the shot-contest range so you can dial
-    // it in mid-game. Handled before the pause check so it also works while paused.
-    if (input.justPressed('contestDown')) adjustContestRange(-5);
-    if (input.justPressed('contestUp'))   adjustContestRange(5);
     if (state.paused) return;
     // Countdown timers for cosmetic effects.
     state.message.ttl = Math.max(0, state.message.ttl - dt);
@@ -204,13 +200,6 @@ function trackBlockContest() {
     if (d.animState !== 'block' || d.actionElapsed >= d.actionDuration) return;
     const holder = state.players.find(p => p.hasBall);
     if (holder) d.blockContestDist = Math.min(d.blockContestDist, dist(d, holder));
-}
-
-// Nudges the contest range up or down (clamped to a sane band) and flashes the new
-// value so you can tune how close a defender has to be to count as contesting.
-function adjustContestRange(delta) {
-    state.contestMaxDistance = clamp(state.contestMaxDistance + delta, 20, 150);
-    state.message = { text: `CONTEST RANGE ${state.contestMaxDistance}px`, ttl: 0.8 };
 }
 
 // Returns the player object that is currently under player control.

@@ -293,6 +293,18 @@ export function beginPass(state, passer, receiver) {
 //   2. Whether the shot goes in, based on timing quality, distance, and movement.
 //   3. How it misses (airball, front rim, back rim, bank off glass).
 //   4. Where the ball ends up (exact target coordinates for the animation).
+// Maps the defender's distance (in pixels) from the shooter to a contest value
+// from 1 (right on top of them) down to 0 (wide open / too far to bother the shot).
+//
+// >>> THIS IS THE CURVE TO TUNE <<<
+// It's currently a simple straight-line falloff, but it doesn't have to stay linear.
+// Feed it real (distance -> contest) data points and replace the body with the
+// best-fit curve through them.
+export function contestFromDistance(distance) {
+    const maxDistance = 60; // beyond this many px the shot is treated as wide open
+    return clamp(1 - distance / maxDistance, 0, 1);
+}
+
 // "charge01" is 0–1 and represents how far through the shot meter the player released
 // "selectedShotType" is 'jumper', 'layup', or 'dunk' (decided by chooseShotType in game.js)
 export function beginShot(state, shooter, charge01, selectedShotType = 'jumper') {
@@ -379,16 +391,17 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     state.attempts += 1;
 
     // --- Contest meter ---
-    // Purely how close the defender was to the shooter (0 = wide open, 1 = smothered).
-    // If the defender is mid-block, use the closest they got during that lunge — i.e.
-    // their position at the peak of the block — rather than wherever they happen to be
-    // on this exact frame.
+    // First find how far the defender was from the shooter. If the defender is
+    // mid-block, use the closest they got during that lunge — i.e. their position at
+    // the peak of the block — rather than wherever they happen to be on this exact frame.
     const def = state.defender;
     const blocking = def.animState === 'block' && def.actionElapsed < def.actionDuration;
     const contestDist = blocking && isFinite(def.blockContestDist)
         ? def.blockContestDist
         : dist(shooter, def);
-    state.lastContest = clamp(1 - contestDist / state.contestMaxDistance, 0, 1);
+    // Then run that distance through the tunable contest curve.
+    state.lastContestDist = contestDist;
+    state.lastContest = contestFromDistance(contestDist);
 
     // --- Shot style determination ---
     // Decides whether the shot is a swish, bank (off the backboard), rim, or miss.

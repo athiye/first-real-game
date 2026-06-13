@@ -88,13 +88,8 @@ export const GAME = {
     blockLungeBase: 30,      // lunge speed from a dead standstill
     blockLungeMomentum: 60,  // bonus lunge speed when already sprinting at the ball
     blockLungeMin: 18,       // lowest possible lunge speed (used when moving away)
-    blockDuration: 0.3,      // how long the committed block lunge lasts
-
-    // Shot contest: a defender within this many pixels of the shooter produces some
-    // contest (1 = right on top of them, 0 = this far away or further = wide open).
-    // This is just the STARTING value — adjust it live in-game with the '-' and '='
-    // keys (shown in the HUD as "MAX"), then copy the number you like back here.
-    contestMaxDistance: 60
+    blockDuration: 0.3       // how long the committed block lunge lasts
+    // (Shot contest is now a tunable curve — see contestFromDistance() in physics.js.)
 };
 
 // Shot difficulty. Variable names intuitive
