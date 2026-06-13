@@ -298,9 +298,9 @@ export function beginPass(state, passer, receiver) {
 //
 // contest function based on distance alone, block isn't included here
 export function contestFromDistance(distance, angle) {
-    const absangle = Math.abs(angle);
+    let absangle = Math.abs(angle);
     absangle = (absangle <= GAME.contestAngleThreshold ? 0: absangle);
-    return (((Math.PI)/2 - min(Math.PI/2, absangle)) / (Math.PI/2));
+    return (((Math.PI)/2 - Math.min(Math.PI/2, absangle)) / (Math.PI/2));
 }
 
 // "charge01" is 0–1 and represents how far through the shot meter the player released
