@@ -43,7 +43,6 @@ export class Renderer {
         this.drawPlayers(state);
         this.drawBall(state.ball);
         this.drawHoopFront(state);
-        this.drawHud(state);
         if (state.paused) this.drawPause();
         ctx.restore();
         this.screen.save();
@@ -52,6 +51,9 @@ export class Renderer {
         this.screen.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
         this.screen.drawImage(this.buffer, 0, 0, DISPLAY_W, DISPLAY_H);
         this.screen.restore();
+        // Draw the HUD last, straight onto the full-resolution screen canvas so its
+        // text renders crisp instead of being scaled up from the chunky pixel buffer.
+        this.drawHud(state);
     }
 
     px(x, y, w, h, color) {
@@ -66,11 +68,6 @@ export class Renderer {
         ctx.textAlign = align;
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(text, Math.round(x), Math.round(y));
-    }
-
-    outlineRect(x, y, w, h, fill, outline = COLORS.ink) {
-        this.px(x - 1, y - 1, w + 2, h + 2, outline);
-        this.px(x, y, w, h, fill);
     }
 
     project(x, y, z = 0) {
@@ -272,25 +269,51 @@ export class Renderer {
         ctx.restore();
     }
 
+    // Drawn directly on the full-resolution screen canvas (not the pixel-art buffer),
+    // so the text is sharp and easy to read. Layout coordinates are still expressed in
+    // buffer space and scaled up by S, so the HUD lines up with the game exactly as before.
     drawHud(state) {
-        this.px(0, 0, VW, 31, COLORS.hudInk);
-        this.outlineRect(3, 6, 70, 18, COLORS.hudRed);
-        this.outlineRect(76, 6, 115, 18, COLORS.hudBlue);
-        this.outlineRect(194, 6, 70, 18, COLORS.hudRed);
-        this.outlineRect(268, 6, 74, 18, '#1d2440');
-        this.outlineRect(346, 6, 164, 18, '#18213b');
-        this.text(`MAKE ${String(state.makes).padStart(2, '0')}`, 38, 19, COLORS.white, 8);
-        this.text('COOL GAME', 133, 19, COLORS.white, 8);
-        this.text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
+        const ctx = this.screen;
+        const S = DISPLAY_W / VW; // buffer -> screen scale (2x)
+        // Local helpers that draw in buffer coordinates but onto the hi-res screen.
+        const rect = (x, y, w, h, color) => {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * S, y * S, w * S, h * S);
+        };
+        const outline = (x, y, w, h, fill, line = COLORS.ink) => {
+            rect(x - 1, y - 1, w + 2, h + 2, line);
+            rect(x, y, w, h, fill);
+        };
+        const text = (str, x, y, color, size, align = 'center') => {
+            ctx.fillStyle = color;
+            ctx.font = `bold ${size * S}px ui-monospace, Menlo, Consolas, monospace`;
+            ctx.textAlign = align;
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(str, x * S, y * S);
+        };
+
+        ctx.save();
+        // Top scoreboard bar and its panels.
+        rect(0, 0, VW, 31, COLORS.hudInk);
+        outline(3, 6, 70, 18, COLORS.hudRed);
+        outline(76, 6, 115, 18, COLORS.hudBlue);
+        outline(194, 6, 70, 18, COLORS.hudRed);
+        outline(268, 6, 74, 18, '#1d2440');
+        outline(346, 6, 164, 18, '#18213b');
+        text(`MAKE ${String(state.makes).padStart(2, '0')}`, 38, 19, COLORS.white, 8);
+        text('COOL GAME', 133, 19, COLORS.white, 8);
+        text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
-        this.text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
-        this.text(`DEF DIST ${Math.round(state.lastContestDist)}px`, 428, 19, COLORS.white, 6);
-        this.px(146, 26, 72, 3, COLORS.hudBlue2);
-        this.text('PRACTICE GYM', 182, 29, COLORS.white, 4);
+        text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
+        text(`DEF DIST ${Math.round(state.lastContestDist)}px`, 428, 19, COLORS.white, 6);
+        rect(146, 26, 72, 3, COLORS.hudBlue2);
+        text('PRACTICE GYM', 182, 29, COLORS.white, 4);
+        // Center message banner (with a dark drop shadow for legibility).
         if (state.message.ttl > 0) {
-            this.text(state.message.text, 256 + 1, 49 + 1, COLORS.ink, 11);
-            this.text(state.message.text, 256, 49, COLORS.gold, 11);
+            text(state.message.text, VW / 2 + 1, 49 + 1, COLORS.ink, 11);
+            text(state.message.text, VW / 2, 49, COLORS.gold, 11);
         }
+        ctx.restore();
     }
 
     drawPlayerMarker(state) {
