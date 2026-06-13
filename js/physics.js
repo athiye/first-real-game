@@ -297,8 +297,10 @@ export function beginPass(state, passer, receiver) {
 // from 1 (right on top of them) down to 0 (wide open / too far to bother the shot).
 //
 // contest function based on distance alone, block isn't included here
-export function contestFromDistance(distance) {
-    return distance >= 36 ? 0: distance > 12 ? -4.07794 * distance + 149.51661 : 100;
+export function contestFromDistance(distance, angle) {
+    const absangle = Math.abs(angle);
+    absangle = (absangle <= GAME.contestAngleThreshold ? 0: absangle);
+    return (((Math.PI)/2 - min(Math.PI/2, absangle)) / (Math.PI/2));
 }
 
 // "charge01" is 0–1 and represents how far through the shot meter the player released
@@ -399,7 +401,7 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     // distance readout at this release distance (the ball handler is gone now, so the
     // live updater in game.js won't touch it until the next possession).
     state.shooterDist = contestDist;
-    state.lastContest = contestFromDistance(contestDist);
+    state.lastContest = contestFromDistance(contestDist, state.contestAngle);
 
     // --- Shot style determination ---
     // Decides whether the shot is a swish, bank (off the backboard), rim, or miss.

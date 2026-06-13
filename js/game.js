@@ -1,5 +1,5 @@
 import { COURT, GAME } from './config.js';
-import { clamp, dist, normalize, rand } from './math.js';
+import { clamp, dist, normalize, rand, angleRelativeHoop } from './math.js';
 import { RESET_SPOTS, makeCooldowns, makeBall, rim } from './entities.js';
 import { Input } from './input.js';
 import {
@@ -132,6 +132,7 @@ function createInitialState() {
         netSide: 0,               // which direction the net sways
         lastContest: 0,           // how contested the most recent shot was (0 = wide open, 1 = smothered)
         shooterDist: 0,           // live distance (px) from the defender to the current ball handler
+        contestAngle: 0,
         paused: false
     };
 }
@@ -189,6 +190,7 @@ function update(dt) {
     resolveSpacing([...state.players, state.defender]);
     trackBlockContest();
     updateShooterDistance();
+    updateContestAngle();
     updateBall(state, dt);
 }
 
@@ -198,6 +200,12 @@ function update(dt) {
 function updateShooterDistance() {
     const holder = state.players.find(p => p.hasBall);
     if (holder) state.shooterDist = dist(holder, state.defender);
+}
+
+function updateContestAngle() {
+    // angle between defender and shooter relative to hoop, right in between is 0
+    const holder = state.players.find(p => p.hasBall);
+    if (holder) state.contestAngle = angleRelativeHoop(holder, state.defender);
 }
 
 // While the defender is mid-block, remember the closest they get to the ball

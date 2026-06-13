@@ -88,8 +88,8 @@ export const GAME = {
     blockLungeBase: 30,      // lunge speed from a dead standstill
     blockLungeMomentum: 60,  // bonus lunge speed when already sprinting at the ball
     blockLungeMin: 18,       // lowest possible lunge speed (used when moving away)
-    blockDuration: 0.3       // how long the committed block lunge lasts
-    // (Shot contest is now a tunable curve — see contestFromDistance() in physics.js.)
+    blockDuration: 0.3,      // how long the committed block lunge lasts
+    contestAngleThreshold: 0.1
 };
 
 // Shot difficulty. Variable names intuitive
@@ -250,3 +250,30 @@ export const COLORS = {
     green: '#65e071',
     red: '#d33d3c'
 };
+
+
+
+/*
+
+First, get the distance between shooter and defender as well as defender's angle to shooter relative to the hoop.
+    - first, take absolute value of angle because side doesn't matter. Then, 
+    - 0 -> 1, pi/4 -> 0.5 or smth, pi/2 -> 0
+    - if (angle == +- contestAngleThreshold)
+    - (pi/2 - abs(angle)) / (pi/2)
+    - 
+Then, have some scalar to 
+multiply that by or something. Straight on should be 1, and directly perpendicular should be 0. Anything +- 20 degrees of straight on should keep being 1, 
+then it should just be a linear function to perpendicular. Multiply this by the shot contest value to get the real shot contest value. 
+
+export function contestFromDistance(distance, angle) {
+    
+
+}
+
+How to get defender angle to shooter? 
+
+
+
+
+
+*/

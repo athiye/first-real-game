@@ -22,6 +22,11 @@ export function dist(a, b) {
     return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+export function angleRelativeHoop(a, b) {
+    const abx = b.x - a.x, aby = b.y - a.y, acx = 111 - a.x, acy = 154 - a.y;
+    return Math.atan2(Math.abs(abx * acx + aby *acy), (abx * acy - aby * acx));
+}
+
 export function normalize(x, y) {
     const d = Math.hypot(x, y);
     if (d < 0.0001) return { x: 0, y: 0 };
