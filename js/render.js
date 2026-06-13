@@ -299,13 +299,15 @@ export class Renderer {
         outline(76, 6, 115, 18, COLORS.hudBlue);
         outline(194, 6, 70, 18, COLORS.hudRed);
         outline(268, 6, 74, 18, '#1d2440');
-        outline(346, 6, 164, 18, '#18213b');
+        outline(346, 6, 75, 18, '#18213b'); 
+        outline (426, 6, 85, 18, '#26654f');
         text(`MAKE ${String(state.makes).padStart(2, '0')}`, 38, 19, COLORS.white, 8);
         text('COOL GAME', 133, 19, COLORS.white, 8);
         text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
         text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
-        text(`DEF DIST ${Math.round(state.shooterDist)}px`, 428, 19, COLORS.white, 6);
+        text(`DEF DIST ${Math.round(state.shooterDist)}px`, 384, 19, COLORS.white, 6);
+        text(`CONTEST ${Math.round(state.shooterDist)}%`, 32, 19, COLORS.white, 8);
         rect(146, 26, 72, 3, COLORS.hudBlue2);
         text('PRACTICE GYM', 182, 29, COLORS.white, 4);
         // Center message banner (with a dark drop shadow for legibility).

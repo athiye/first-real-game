@@ -296,13 +296,9 @@ export function beginPass(state, passer, receiver) {
 // Maps the defender's distance (in pixels) from the shooter to a contest value
 // from 1 (right on top of them) down to 0 (wide open / too far to bother the shot).
 //
-// >>> THIS IS THE CURVE TO TUNE <<<
-// It's currently a simple straight-line falloff, but it doesn't have to stay linear.
-// Feed it real (distance -> contest) data points and replace the body with the
-// best-fit curve through them.
+// contest function based on distance alone, block isn't included here
 export function contestFromDistance(distance) {
-    const maxDistance = 60; // beyond this many px the shot is treated as wide open
-    return clamp(1 - distance / maxDistance, 0, 1);
+    return distance >= 36 ? 0: distance > 12 ? -4.07794 * distance + 149.51661 : 100;
 }
 
 // "charge01" is 0–1 and represents how far through the shot meter the player released
