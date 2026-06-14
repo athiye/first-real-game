@@ -89,7 +89,8 @@ export const GAME = {
     blockLungeMomentum: 60,  // bonus lunge speed when already sprinting at the ball
     blockLungeMin: 18,       // lowest possible lunge speed (used when moving away)
     blockDuration: 0.3,      // how long the committed block lunge lasts
-    contestAngleThreshold: 0.1
+    contestAngleThreshold: 0.1,
+    angleFactor: 1
 };
 
 // Shot difficulty. Variable names intuitive

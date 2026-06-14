@@ -24,7 +24,7 @@ export function dist(a, b) {
 
 export function angleRelativeHoop(a, b) {
     const abx = b.x - a.x, aby = b.y - a.y, acx = 111 - a.x, acy = 154 - a.y;
-    return Math.atan2(Math.abs(abx * acx + aby *acy), (abx * acy - aby * acx));
+    return Math.atan2((acx * aby - acy * abx), abx * acx + aby *acy);
 }
 
 export function normalize(x, y) {
