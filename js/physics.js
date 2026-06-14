@@ -301,7 +301,7 @@ export function contestFromDistance(distance, angle) {
     let absangle = Math.abs(angle);
     let withoutAngle = distance >= 36 ? 0: distance > 12 ? -4.07794 * distance + 149.51661 : 100;
     absangle = (absangle <= GAME.contestAngleThreshold ? 0: absangle);
-    return (((Math.PI)/2 - Math.min(Math.PI/2, absangle)) / (Math.PI/2)) * withoutAngle * GAME.angleFactor;
+    return clamp((((Math.PI)/2 - Math.min(Math.PI/2, absangle)) / (Math.PI/2)) * withoutAngle * GAME.angleFactor, 0, 100);
 }
 
 // "charge01" is 0–1 and represents how far through the shot meter the player released
@@ -343,6 +343,24 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     b.arcScale = b.shotType === 'jumper'
         ? clamp(SHOT_ODDS.jumperArcHeight + rand(-SHOT_ODDS.shotArcNoise, SHOT_ODDS.shotArcNoise), SHOT_ODDS.shotArcMin, SHOT_ODDS.shotArcMax)
         : 1;
+
+    // Floater / stepback arc adjustment (jumpers only).
+    // "toward basket" is the shooter's x-velocity component in the direction of the hoop.
+    let isFloater = false;
+    if (b.shotType === 'jumper') {
+        const toBasket = Math.sign(hoopX - shooter.x) || -1;
+        const xSpeedToBasket = shooter.vx * toBasket;
+        if (xSpeedToBasket > GAME.floaterSpeedThreshold) {
+            // Moving fast toward the basket — floater: higher arc, contest halved later.
+            b.arcScale *= GAME.floaterArcScale;
+            isFloater = true;
+        } else if (xSpeedToBasket < 0) {
+            // Moving away from the basket (stepback) — flatten the arc proportionally.
+            const backFraction = clamp(-xSpeedToBasket / GAME.sprintSpeed, 0, 1);
+            b.arcScale *= (1 - backFraction * GAME.stepbackArcFlattenMax);
+        }
+        b.arcScale = clamp(b.arcScale, SHOT_ODDS.shotArcMin, SHOT_ODDS.shotArcMax);
+    }
 
     // --- Timing quality calculation ---
     // "error" is how far charge01 was from the perfect release point (GAME.greenCenter).
@@ -403,6 +421,7 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     // live updater in game.js won't touch it until the next possession).
     state.shooterDist = contestDist;
     state.lastContest = contestFromDistance(contestDist, state.contestAngle);
+    if (isFloater) state.lastContest *= 0.5;  // floaters are harder to contest
 
     // --- Shot style determination ---
     // Decides whether the shot is a swish, bank (off the backboard), rim, or miss.

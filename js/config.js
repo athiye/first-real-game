@@ -90,7 +90,15 @@ export const GAME = {
     blockLungeMin: 18,       // lowest possible lunge speed (used when moving away)
     blockDuration: 0.3,      // how long the committed block lunge lasts
     contestAngleThreshold: 0.1,
-    angleFactor: 1
+    angleFactor: 1.2,
+
+    // Floater / stepback arc tuning.
+    // If the shooter's x-speed toward the basket exceeds this (px/s), the shot
+    // becomes a floater: arc goes higher and contest is halved.
+    floaterSpeedThreshold: 40,
+    floaterArcScale: 1.55,      // arc multiplier for floaters
+    // When stepping back, arc flattens by up to this fraction at full sprint speed.
+    stepbackArcFlattenMax: 0.35
 };
 
 // Shot difficulty. Variable names intuitive
