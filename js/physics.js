@@ -304,16 +304,18 @@ export function contestFromDistance(distance, angle) {
     return clamp((((Math.PI)/2 - Math.min(Math.PI/2, absangle)) / (Math.PI/2)) * withoutAngle * GAME.angleFactor, 0, 100);
 }
 
+
+
 // "charge01" is 0–1 and represents how far through the shot meter the player released
 // "selectedShotType" is 'jumper', 'layup', or 'dunk' (decided by chooseShotType in game.js)
 export function beginShot(state, shooter, charge01, selectedShotType = 'jumper') {
     const goal = rim();
     const hoopX = goal.x + 2;
     const hoopY = goal.y;
-    const d = dist(shooter, goal);  // distance from shooter to the hoop
+    const shotDistance = dist(shooter, goal);  // distance from shooter to the hoop
     const dunk = selectedShotType === 'dunk';
     const layup = selectedShotType === 'layup';
-    const isThree = d > COURT.threeRadius + 4;  // true if shooter is behind the three-point line
+    const isThree = shotDistance > COURT.threeRadius + 1;  // true if shooter is behind the three-point line
     shooter.hasBall = false;
     state.pendingShot = null;
     shooter.pivotLocked = false;
@@ -328,19 +330,19 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     // Ball launches from just in front of and slightly above the shooter.
     b.fromX = shooter.x + shooter.facingX * 6;
     b.fromY = shooter.y - (dunk || layup ? 13 : 10);
-    b.fromZ = dunk ? HOOP_Z + 13 : layup ? 18 : 14;
+    b.fromZ = dunk ? HOOP_Z + (11 * Math.random() * 0.6 + 0.7) : layup ? 18 : 14;
     b.x = b.fromX;
     b.y = b.fromY;
     b.z = b.fromZ;
     b.elapsed = 0;
-    b.duration = dunk ? SHOT_ODDS.dunkDuration : layup ? SHOT_ODDS.layupDuration : clamp(GAME.shotBaseDuration + d / 500, 0.5, 0.82);
+    b.duration = dunk ? SHOT_ODDS.dunkDuration : layup ? clamp((SHOT_ODDS.layupDuration + shotDistance / (Math.random() * 200 + 200)), SHOT_ODDS.layupDuration, SHOT_ODDS.layupDuration + 0.2) : clamp(GAME.shotBaseDuration + shotDistance / 500, 0.5, 0.82);
     b.rimHit = false;
     b.touchedBoard = false;
     b.rimContacts = 0;
     b.shotValue = isThree ? 3 : 2;
     b.shotType = dunk ? 'dunk' : layup ? 'layup' : 'jumper';
     // Jumpers get a randomised arc height; layups and dunks use a fixed arc. Within a bound and randomised a little.
-    b.arcScale = b.shotType === 'jumper'
+    b.arcScale = b.shotType === 'jumper' // this part is good, don't change again plzzz
         ? clamp(SHOT_ODDS.jumperArcHeight + rand(-SHOT_ODDS.shotArcNoise, SHOT_ODDS.shotArcNoise), SHOT_ODDS.shotArcMin, SHOT_ODDS.shotArcMax)
         : 1;
 
@@ -351,25 +353,97 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
         const toBasket = Math.sign(hoopX - shooter.x) || -1;
         const xSpeedToBasket = shooter.vx * toBasket;
         if (xSpeedToBasket > GAME.floaterSpeedThreshold) {
-            // Moving fast toward the basket — floater: higher arc, contest halved later.
+            // Moving fast toward the basket is floater: higher arc, contest halved later.
             b.arcScale *= GAME.floaterArcScale;
             isFloater = true;
         } else if (xSpeedToBasket < 0) {
             // Moving away from the basket (stepback) — flatten the arc proportionally.
-            const backFraction = clamp(-xSpeedToBasket / GAME.sprintSpeed, 0, 1);
+            const backFraction = clamp(-xSpeedToBasket / GAME.sprintSpeed, 0, 1); // this part is REALLY good, don't change
             b.arcScale *= (1 - backFraction * GAME.stepbackArcFlattenMax);
         }
         b.arcScale = clamp(b.arcScale, SHOT_ODDS.shotArcMin, SHOT_ODDS.shotArcMax);
     }
 
+
+    // For when they are blocking, use their position at the peak of the block, not where they are at the time because they might just be doing a 
+    // closeout which isn't really contesting at all
+    const def = state.defender;
+    const blocking = def.animState === 'block' && def.actionElapsed < def.actionDuration;
+    const contestDist = blocking && isFinite(def.blockContestDist)
+        ? def.blockContestDist
+        : dist(shooter, def);
+    // RUn distance thru the contest curve (the e function). Freeze the
+    // distance readout at this release distance, since distance doesn't matter if no one has the ball.
+    state.shooterDist = contestDist;
+    state.lastContest = contestFromDistance(contestDist, state.contestAngle);
+    if (isFloater) state.lastContest *= 0.5;  // floaters are harder to contest but also harder to make
+    state.lastShotError = charge01 - GAME.greenCenter;
+
+
     // --- Timing quality calculation ---
     // "error" is how far charge01 was from the perfect release point (GAME.greenCenter).
     // Positive = released too late (overshot); negative = too early (short). 0 is perfect. 
     const error = charge01 - GAME.greenCenter;
+    /*
+
+    we are given: 
+        error
+        isFloater && shotType
+        isMoving / Moving amount
+        shotDistance
+        contestAmt
+
+        we must give --> makeChance
+
+        // less than 0.35 --> pump fake
+        // from -0.3 to 0.27, 0 is perfect
+        // +- 0.02 is guaranteed no matter what FS
+        // +- 0.055 or something, pretty solidly likely, at least 40% chance of in no matter what and open shot straight guaranteed
+        // past that is just based on a function
+        if (+- 0.02) makeChance = 1
+        else if (+- 0.055) 
+        For a 3 (not deep 3)
+            0 - 0.02 error : 100% make
+                blockChance = 3% if contestAmt above 70%
+                Perfect Shot
+            0.02 - 0.055 : (80% - 100%) - 5% * moveAmt - 20% * contestAmt - 5 % (only if contestAmt above 60% and is blocking)
+                blockChance (only if contestAmt above 60%) → contestAmt / 10
+                Really solid shot
+            0.055 - 0.1 : (80% - 50%) - 5% * moveAmt - 20% * contestAmt - 5% (only if contestAmt above 50% and is blocking)
+                blockChance (only if contestAmt above 50%) → ContestAmt / 9
+                Decent - Borderline Decent shot. This is the edge and what you should normally be getting, ideally you get these less contested though. 
+            0.1 - 0.2 : max(1%, (50% - 20%) - 5% * moveAmt - ((x - 10%) * contestAmt) - 5% (only if contestAmt above 50% and is blocking))
+            0.2 - 0.27 : max(1%, (25% - 10%) - (x% * contestAmt))
+                blockChance (if contestAmt above 50% → contestAmt / 9)
+                Really bad but not the worst
+            0.27 : max(1%, 10% - (10% * contestAmt))
+                blockChance (if contestAmt above 50% → contestAmt / 9)
+            Lower somehow : 1%
+
+        For a midranger
+            0 - 0.02 error : 100% make
+                blockChance = 3% if contestAmt above 70%
+                Perfect Shot
+            0.02 - 0.055 : (80% - 100%) - 5% * moveAmt - 15% * contestAmt - 15 % (only if contestAmt above 60% and is blocking)
+                blockChance (only if contestAmt above 60%) → contestAmt / 10
+                Really solid shot
+            0.055 - 0.1 : (80% - 50%) - 5% * moveAmt - 20% * contestAmt - 5% (only if contestAmt above 50% and is blocking)
+                blockChance (only if contestAmt above 50%) → ContestAmt / 9
+                Decent - Borderline Decent shot. This is the edge and what you should normally be getting, ideally you get these less contested though. 
+            0.1 - 0.2 : max(1%, (50% - 20%) - 5% * moveAmt - ((x - 10%) * contestAmt) - 5% (only if contestAmt above 50% and is blocking))
+            0.2 - 0.27 : max(1%, (25% - 10%) - (x% * contestAmt))
+                blockChance (if contestAmt above 50% → contestAmt / 9)
+                Really bad but not the worst
+            0.27 : max(1%, 10% - (10% * contestAmt))
+                blockChance (if contestAmt above 50% → contestAmt / 9)
+            Lower somehow : 1%           
+
+
+    */
     const absError = Math.abs(error);
     // "slightWindow" is the margin around perfect where timing still counts as "on target".
     // Dunks and layups are more forgiving than three-pointers.
-    const slightWindow = dunk ? SHOT_ODDS.dunkTimingWindow : layup ? SHOT_ODDS.layupTimingWindow : d < 70 ? SHOT_ODDS.closeJumpTimingWindow : isThree ? SHOT_ODDS.threePointTimingWindow : SHOT_ODDS.jumpTimingWindow;
+    const slightWindow = dunk ? SHOT_ODDS.dunkTimingWindow : layup ? SHOT_ODDS.layupTimingWindow : shotDistance < 70 ? SHOT_ODDS.closeJumpTimingWindow : isThree ? SHOT_ODDS.threePointTimingWindow : SHOT_ODDS.jumpTimingWindow;
     const overshot = error > slightWindow;
     const short = error < -slightWindow;
     // severeMistime: 0 = slightly off, 1 = very badly timed.
@@ -381,7 +455,7 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
 
     // --- Make chance calculation ---
     // "perfectBase" is how often this shot type goes in with perfect timing.
-    const perfectBase = dunk ? SHOT_ODDS.dunkPerfectMakeChance : layup ? SHOT_ODDS.layupPerfectMakeChance : d < 70 ? SHOT_ODDS.closeJumpPerfectMakeChance : isThree ? SHOT_ODDS.threePointPerfectMakeChance : SHOT_ODDS.jumpPerfectMakeChance;
+    const perfectBase = dunk ? SHOT_ODDS.dunkPerfectMakeChance : layup ? SHOT_ODDS.layupPerfectMakeChance : shotDistance < 70 ? SHOT_ODDS.closeJumpPerfectMakeChance : isThree ? SHOT_ODDS.threePointPerfectMakeChance : SHOT_ODDS.jumpPerfectMakeChance;
     // "onTargetMake" subtracts penalties from the perfect base.
     const onTargetMake = clamp(perfectBase - SHOT_ODDS.missChanceOnPerfectShot - movePenalty * SHOT_ODDS.movePenaltyScale, SHOT_ODDS.perfectOnTargetMin, SHOT_ODDS.makeChanceMaxDunk);
     let makeChance;
@@ -395,10 +469,10 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     } else {
         // Jumpers: timing error reduces make chance sharply; a "bailout" chance
         // (SHOT_ODDS.luckyMakeChanceOnBadShot) lets badly-timed shots still occasionally go in.
-        const falloffRange = d < 70 ? SHOT_ODDS.closeShotFalloffRange : isThree ? SHOT_ODDS.threePointFalloffRange : SHOT_ODDS.normalShotFalloffRange;
+        const falloffRange = shotDistance < 70 ? SHOT_ODDS.closeShotFalloffRange : isThree ? SHOT_ODDS.threePointFalloffRange : SHOT_ODDS.normalShotFalloffRange;
         const offSeverity = clamp((absError - slightWindow) / falloffRange, 0, 1);
         const sharpFalloff = offSeverity * offSeverity;
-        const bailout = SHOT_ODDS.luckyMakeChanceOnBadShot * (isThree ? SHOT_ODDS.threePointBailoutScale : d < 70 ? SHOT_ODDS.closeShotBailoutScale : SHOT_ODDS.normalShotBailoutScale);
+        const bailout = SHOT_ODDS.luckyMakeChanceOnBadShot * (isThree ? SHOT_ODDS.threePointBailoutScale : shotDistance < 70 ? SHOT_ODDS.closeShotBailoutScale : SHOT_ODDS.normalShotBailoutScale);
         makeChance = clamp(onTargetMake * (1 - sharpFalloff) + bailout * sharpFalloff, SHOT_ODDS.makeChanceMin, SHOT_ODDS.makeChanceMax);
     }
     // Add a small random jitter so identical shots don't always have the same result.
@@ -407,22 +481,7 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     b.make = Math.random() < makeChance;  // actually flip the coin
     state.attempts += 1;
 
-    // --- Contest meter ---
-    // First find how far the defender was from the shooter. If the defender is
-    // mid-block, use the closest they got during that lunge — i.e. their position at
-    // the peak of the block — rather than wherever they happen to be on this exact frame.
-    const def = state.defender;
-    const blocking = def.animState === 'block' && def.actionElapsed < def.actionDuration;
-    const contestDist = blocking && isFinite(def.blockContestDist)
-        ? def.blockContestDist
-        : dist(shooter, def);
-    // Then run that distance through the tunable contest curve. Freeze the HUD's
-    // distance readout at this release distance (the ball handler is gone now, so the
-    // live updater in game.js won't touch it until the next possession).
-    state.shooterDist = contestDist;
-    state.lastContest = contestFromDistance(contestDist, state.contestAngle);
-    if (isFloater) state.lastContest *= 0.5;  // floaters are harder to contest
-
+    
     // --- Shot style determination ---
     // Decides whether the shot is a swish, bank (off the backboard), rim, or miss.
     // Each style has different visual paths and different miss-bounce directions.

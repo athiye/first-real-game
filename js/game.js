@@ -131,6 +131,7 @@ function createInitialState() {
         netTimer: 0,              // how much the net is currently swaying
         netSide: 0,               // which direction the net sways
         lastContest: 0,           // how contested the most recent shot was (0 = wide open, 1 = smothered)
+        lastShotError: 0,         // shot error of the last shot for troubleshooting
         shooterDist: 0,           // live distance (px) from the defender to the current ball handler
         contestAngle: 0,
         paused: false
@@ -550,7 +551,7 @@ function inPaint(p) {
 }
 
 // Returns true if the player is in the close half of the paint
-// (the side nearer the basket — where dunks happen).
+// (the side nearer the basket, where dunks happen).
 function inClosePaintHalf(p) {
     const midPaintX = (COURT.paintLeft + COURT.paintRight) / 2;
     return inPaint(p) && p.x <= midPaintX;
@@ -566,6 +567,9 @@ function chooseShotType(p, driving) {
     if (driving && inClosePaintHalf(p)) return 'dunk';
     if (driving && inPaint(p))          return 'layup';
     if (!driving && inClosePaintHalf(p)) return 'layup';
+    if (!driving && inPaint(p)) {
+        return Math.random(0.5) > 0.5 ? 'layup' : 'jumper';
+    }
     return 'jumper';
 }
 
