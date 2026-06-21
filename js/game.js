@@ -133,6 +133,7 @@ function createInitialState() {
         lastContest: 0,           // how contested the most recent shot was (0 = wide open, 1 = smothered)
         lastShotError: 0,         // shot error of the last shot for troubleshooting
         shooterDist: 0,           // live distance (px) from the defender to the current ball handler
+        shotDist: 0, // distance from shooter to hoop
         contestAngle: 0,
         paused: false
     };
@@ -193,6 +194,7 @@ function update(dt) {
     updateShooterDistance();
     updateContestAngle();
     updateBall(state, dt);
+    updateDistFromHoop();
 }
 
 // Keeps the HUD's "DEF DIST" readout live: while someone is holding the ball, it
@@ -201,6 +203,11 @@ function update(dt) {
 function updateShooterDistance() {
     const holder = state.players.find(p => p.hasBall);
     if (holder) state.shooterDist = dist(holder, state.defender);
+}
+
+function updateDistFromHoop() {
+    const holder = state.players.find(p => p.hasBall);
+    if (holder) state.shotDist = dist(holder, COURT.rim);
 }
 
 function updateContestAngle() {

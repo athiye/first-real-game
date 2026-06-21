@@ -305,7 +305,7 @@ export class Renderer {
         text('COOL GAME', 133, 19, COLORS.white, 8);
         text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
-        text(`FG ${state.makes}/${state.attempts} ${pct}%`, 305, 19, COLORS.white, 7);
+        text(`DIST ${Math.round(state.shotDist)} px`, 305, 19, COLORS.white, 7);
         text(`SHOT ERROR  ${state.lastShotError}`, 384, 19, COLORS.white, 6);
         text(`CONTEST ${Math.round(state.lastContest)}%`, 467, 19, COLORS.white, 8); 
         rect(146, 26, 72, 3, COLORS.hudBlue2);
