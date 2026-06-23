@@ -4,7 +4,7 @@ import { RESET_SPOTS, makeCooldowns, makeBall, rim } from './entities.js';
 import { Input } from './input.js';
 import {
     resetTraining, updateBall, updateTeammates, updatePlayerTimers,
-    resolveSpacing, keepOnCourt, beginPass, beginShot, beginLooseBall, startAction
+    resolveSpacing, keepOnCourt, beginPass, beginShot, beginLooseBall, startAction, shotMeterFillTime
 } from './physics.js';
 import { Renderer } from './render.js';
 
@@ -132,6 +132,8 @@ function createInitialState() {
         netSide: 0,               // which direction the net sways
         lastContest: 0,           // how contested the most recent shot was (0 = wide open, 1 = smothered)
         lastShotError: 0,         // shot error of the last shot for troubleshooting
+        lastBlockChance: 0,       // swat chance the last shot faced (0 if the defender wasn't blocking)
+        lastMakeChance: 0,        // final make probability of the most recent shot (for the HUD readout)
         shooterDist: 0,           // live distance (px) from the defender to the current ball handler
         shotDist: 0, // distance from shooter to hoop
         contestAngle: 0,
@@ -408,7 +410,7 @@ function updatePendingShot(dt) {
     if (pending.elapsed >= pending.duration) {
         // Prep is done — start the actual shot charge.
         state.pendingShot = null;
-        state.shotCharge = { playerId: p.id, elapsed: 0, shotType: pending.shotType };
+        state.shotCharge = { playerId: p.id, elapsed: 0, shotType: pending.shotType, fillTime: shotMeterFillTime(state, p) };
         startAction(p, 'shoot', 999); // 999 = hold the shoot animation until the button is released
     }
 }
@@ -511,7 +513,7 @@ function handleBallControls(p, dt) {
             state.message = { text: activeAwayMove || facingDot < 0 ? 'TURNAROUND' : 'SHOT PREP', ttl: 0.45 };
         } else {
             // Already facing the hoop — go straight to the shot charge meter.
-            state.shotCharge = { playerId: p.id, elapsed: 0, shotType };
+            state.shotCharge = { playerId: p.id, elapsed: 0, shotType, fillTime: shotMeterFillTime(state, p) };
             startAction(p, shotType === 'dunk' ? 'dunk' : shotType === 'layup' ? 'layup' : 'shoot', 999);
         }
     }
@@ -521,9 +523,10 @@ function handleBallControls(p, dt) {
     // Releasing the button (or hitting max charge) fires the shot immediately.
     if (state.shotCharge?.playerId === p.id) {
         const chargeState = state.shotCharge;
-        chargeState.elapsed = Math.min(GAME.maxChargeTime, chargeState.elapsed + dt);
-        if (input.justReleased('shoot') || chargeState.elapsed >= GAME.maxChargeTime) {
-            const charge = chargeState.elapsed / GAME.maxChargeTime; // 0–1 release timing
+        const fill = chargeState.fillTime || GAME.maxChargeTime; // per-shot meter fill time (contest/move speed it up)
+        chargeState.elapsed = Math.min(fill, chargeState.elapsed + dt);
+        if (input.justReleased('shoot') || chargeState.elapsed >= fill) {
+            const charge = chargeState.elapsed / fill; // 0–1 release timing
             state.shotCharge = null;
             beginShot(state, p, charge, chargeState.shotType);
             return;

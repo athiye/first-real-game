@@ -193,6 +193,102 @@ export const SHOT_ODDS = {
     teammateCutToRimChance: 0.44
 };
 
+// ============================================================
+//  2K-STYLE SHOT RESOLUTION — every number here is adjustable.
+// ------------------------------------------------------------
+//  The make chance is ONE smooth regression on the release-timing error:
+//
+//      make = floor + (ceiling - floor) * exp( -((|err| - PERFECT) / width) ^ makeShape )
+//
+//  Only two things change per shot, and BOTH come from the same place for every shot type:
+//    width   = how forgiving the timing is  (clean/close/open -> wide, contested/moving/deep -> narrow)
+//    ceiling = the make at a perfect release (~1 from the rim out past the arc, capped only when deep)
+//  So a three is just this curve at 101px; midrange / layup / dunk / floater are the SAME curve with a
+//  wider width (they're closer / cleaner) — every shot type is derived off the same regression, no
+//  per-type make tables. Tune the three and everything else moves with it.
+//
+//  shotError units match (charge01 - greenCenter): 0 = ideal release,
+//  negative = too early (short), positive = too late (long).
+// ============================================================
+export const SHOT_MODEL = {
+    // --- The regression itself ---
+    PERFECT:     0.008,  // dead-center half-width: a guaranteed make (tiny flat top before the smooth rolloff)
+    perfectMake: 1.00,   // ceiling: make at a perfect release on a clean look
+    floorMake:   0.01,   // a heave is never truly 0%: every shot keeps at least this make chance
+    makeShape:   1.25,   // rolloff shape (higher = rounder top then bricks faster; lower = longer shallow tail)
+
+    // --- Width: the timing forgiveness. Closer shots are FAR more forgiving (error matters less),
+    //     which is what makes a layup easier than a midrange easier than a three at the same contest.
+    //     widthByDistanceAnchors is the CLEAN (cleanliness = 1) width at each distance, piecewise-linear
+    //     (a smooth regression). The ~101px anchor is the tuned three — leave it to keep the three intact;
+    //     raise the close anchors to make close shots easier. A bad look shrinks the width toward the floor.
+    //     Sorted by px. ---
+    widthByDistanceAnchors: [
+        [0,   0.260],   // point-blank: very forgiving timing
+        [20,  0.200],
+        [40,  0.150],
+        [57,  0.115],   // free-throw / short midrange
+        [101, 0.074],   // THREE — matches the tuned three; every other distance scales off this
+        [140, 0.055],   // deep
+        [184, 0.040]    // half court: very tight
+    ],
+    baselineDist:     101,  // px treated as "the three" — the fixed pivot the forgiveness scales around
+    closeForgiveness: 1.0,  // how much MORE forgiving shots get closer than the three (the dial you asked for):
+                            //   1 = the anchors as-is, >1 = close shots easier & far shots tighter, 0 = flat
+                            //   (everything pivots on baselineDist, so the three NEVER changes)
+    cleanWidthFloor: 0.50, // a totally bad look (cleanliness 0) keeps this fraction of the clean width
+    goodWidthFrac:   1.00, // |err| within PERFECT + width*this still reads "on time" (visual styling only)
+
+    // --- Cleanliness: how open & controlled the look is (sets window width + green make rate) ---
+    contestBiteNear:    0.5,  // contest bites this hard at the rim
+    contestBiteFar:     0.3,  // contest bites this little far away
+    contestBiteDist:    120,   // px over which contestBite eases from near -> far
+    moveDeadzone:       0.15,  // movement below this fraction of top speed is ignored
+    floaterContestMult: 1.0,   // extra contest reduction for floaters (state.lastContest is already halved upstream)
+
+    // --- Per shot type. shotType is one of: jumpShot | layup | dunk | floater ---
+    typeClean:   { jumpShot: 1.00, layup: 1.00, dunk: 1.00, floater: 0.85 }, // inherent quality cap (floaters < 1)
+    movePenalty: { jumpShot: 1.00, layup: 0.15, dunk: 0.05, floater: 0.65 }, // how much movement hurts the look
+    // --- Live shot-meter speed. Contest and movement each speed the meter up (a faster meter is a
+    //     shorter, harder-to-time window). Each value is the meter SPEED MULTIPLIER at its 100%
+    //     endpoint: 1.0 = no change (the base), 2.0 = meter runs twice as fast at that extreme,
+    //     0.5 = half speed (slower / easier). The 0% -> 100% ramp is linear (you give the endpoint,
+    //     the in-between points are interpolated), and the two combine by multiplying. At the default
+    //     1.0 / 1.0 the meter takes exactly GAME.maxChargeTime regardless of contest/movement. ---
+    contestMeterSpeedup: 1.4,  // meter speed at 100% contest        (e.g. 1.5 = 50% faster when smothered)
+    moveMeterSpeedup:    1.2,  // meter speed at full-speed movement (e.g. 2.0 = twice as fast on the run)
+
+    // --- Defender block (only while the defender is mid block-lunge) ---
+    //   Near the rim:  barely lowers the make, but a decent chance to swat it outright.
+    //   Far from rim:  can't reach to swat, but pressures the make % down more.
+    //   Everything also scales with contest and how mistimed the shot was (a clean green
+    //   release is much harder to block than a bricked one).
+    block: {
+        fadeDist:         110,  // px: swat chance fades to ~0 by here; make-pressure grows to full past here
+        maxBlockChance:   0.45, // swat chance at the rim, full contest, badly-timed shot
+        maxMakeReduction: 0.65, // most the make % is cut, far out, full contest, badly-timed shot
+        vulnFloor:        0.25, // a perfectly-timed shot still keeps this fraction of block vulnerability
+        vulnRange:        0.12, // shotError at/above which a shot is fully block-vulnerable (perfect = vulnFloor)
+        // Knock-away: when a shot is swatted, the ball is flung loose from the block point.
+        knockSpeedMin:    95,   // weakest swat fling (px/s) — friction is heavy, so keep these punchy
+        knockSpeedMax:    165,  // hardest swat fling (px/s)
+        knockUpMin:       26,   // smallest upward pop on the swat
+        knockUpMax:       52,   // largest upward pop on the swat
+        knockSpread:      0.5   // max random fling angle off the swat direction (radians)
+    },
+
+    // --- Ceiling by distance: the make at a PERFECT release (px -> 0..1), piecewise-linear.
+    //     ~1 from the rim out past the three; only deep shots cap a perfect release below 100%.
+    //     Anchors: [rim, three≈101/110, deep, half-court≈184, heave]. Keep sorted by px. ---
+    rangeCeilingAnchors: [
+        [0,   1.00],
+        [110, 1.00],   // out to the arc, a perfect release is automatic
+        [150, 0.82],
+        [184, 0.55],   // half court: even perfect timing is a heave
+        [260, 0.18]
+    ]
+};
+
 // colors (AI stuff, idk any of this)
 export const COLORS = {
     bg0: '#050711',          // page / letterbox background

@@ -1,4 +1,4 @@
-import { COURT, GAME, SHOT_ODDS } from './config.js';
+import { COURT, GAME, SHOT_ODDS, SHOT_MODEL } from './config.js';
 import { clamp, lerp, smoothstep, dist, normalize, rand } from './math.js';
 import { RESET_SPOTS, rim } from './entities.js';
 
@@ -299,12 +299,90 @@ export function beginPass(state, passer, receiver) {
 // contest function based on distance alone, block isn't included here
 export function contestFromDistance(distance, angle) {
     let absangle = Math.abs(angle);
-    let withoutAngle = distance >= 36 ? 0: distance > 12 ? -4.07794 * distance + 149.51661 : 100;
+    // Distance falloff as a smooth regression: full contest within `near`, none past `far`,
+    // eased smoothly between (no kinks like the old piecewise-linear ramp).
+    const near = 12, far = 36;
+    const withoutAngle = 100 * (1 - smoothstep((distance - near) / (far - near)));
     absangle = (absangle <= GAME.contestAngleThreshold ? 0: absangle);
     return clamp((((Math.PI)/2 - Math.min(Math.PI/2, absangle)) / (Math.PI/2)) * withoutAngle * GAME.angleFactor, 0, 100);
 }
 
 
+
+// ============================================================
+//  2K-STYLE SHOT RESOLUTION  (all constants live in SHOT_MODEL)
+// ============================================================
+
+// Linear interpolation across a sorted list of [x, value] anchors.
+function piecewise(anchors, x) {
+    if (x <= anchors[0][0]) return anchors[0][1];
+    const last = anchors[anchors.length - 1];
+    if (x >= last[0]) return last[1];
+    for (let i = 1; i < anchors.length; i++) {
+        const [x0, v0] = anchors[i - 1];
+        const [x1, v1] = anchors[i];
+        if (x <= x1) return v0 + (v1 - v0) * ((x - x0) / (x1 - x0));
+    }
+    return last[1];
+}
+
+// STAGE 1a — how open & controlled the shot is (0 = awful look, 1 = pure clean look).
+// Folds contest, movement and shot type into one number that sets the timing forgiveness.
+function shotCleanliness(distance, contest, moveFrac, shotType) {
+    const M = SHOT_MODEL;
+    let c = contest;
+    if (shotType === 'floater') c *= M.floaterContestMult;     // floaters dodge contest
+    const contestBite = lerp(M.contestBiteNear, M.contestBiteFar, clamp(distance / M.contestBiteDist, 0, 1));
+    const open  = 1 - c * contestBite;                          // contest bites more near the rim
+    const over  = clamp((moveFrac - M.moveDeadzone) / (1 - M.moveDeadzone), 0, 1); // ignore tiny movement
+    const still = 1 - over * (M.movePenalty[shotType] ?? 1);    // jumpShot heavy, layup/dunk ~0
+    return clamp(open * still * (M.typeClean[shotType] ?? 1), 0, 1);
+}
+
+// STAGE 1 — describe the shot as the two inputs to the make regression: width + ceiling.
+// Every shot type/distance lands here, so they're all the same curve at different widths.
+function shotParameters(distance, contest, moveFrac, shotType) {
+    const M = SHOT_MODEL;
+    const C = shotCleanliness(distance, contest, moveFrac, shotType);
+
+    // width: timing forgiveness. The clean width comes from distance (closer = far wider); how far a
+    // shot deviates from the three's width is scaled by closeForgiveness (pivoting on baselineDist, so
+    // the three stays fixed). Then a bad look (low cleanliness) shrinks it toward the floor.
+    const baseW   = piecewise(M.widthByDistanceAnchors, M.baselineDist);
+    const anchorW = piecewise(M.widthByDistanceAnchors, distance);
+    const cleanWidth = baseW + (anchorW - baseW) * M.closeForgiveness;
+    const width = Math.max(1e-4, cleanWidth * lerp(M.cleanWidthFloor, 1, C));
+    // ceiling: make at a perfect release. ~1 from the rim past the arc; only deep shots cap it.
+    const ceiling = M.perfectMake * clamp(piecewise(M.rangeCeilingAnchors, distance), 0, 1);
+    // goodHalf: timing still reads "on time" within here (drives shot-style + banner, not the make %).
+    const goodHalf = M.PERFECT + width * M.goodWidthFrac;
+
+    return { width, ceiling, goodHalf, cleanliness: C };
+}
+
+// How long the live shot meter takes to fill, in seconds. Contest and movement at the instant the
+// shot starts each speed it up (a faster meter = a shorter, harder window) by their SHOT_MODEL
+// multipliers, ramped linearly from 0% -> 100% and combined multiplicatively. At the default
+// speedups (1.0 / 1.0) this is exactly GAME.maxChargeTime. Computed once when the meter starts so
+// the meter then runs at a steady rate.
+export function shotMeterFillTime(state, shooter) {
+    const M = SHOT_MODEL;
+    const contest01 = clamp(contestFromDistance(dist(shooter, state.defender), state.contestAngle) / 100, 0, 1);
+    const moveFrac  = clamp(Math.hypot(shooter.vx, shooter.vy) / GAME.sprintSpeed, 0, 1);
+    const speedMult = lerp(1, M.contestMeterSpeedup, contest01) * lerp(1, M.moveMeterSpeedup, moveFrac);
+    return GAME.maxChargeTime / Math.max(0.05, speedMult);
+}
+
+// STAGE 2 — resolve the player's release timing (shotError) into a make probability.
+// One smooth curve: a tiny guaranteed core, then a continuous exp rolloff from ceiling to floor.
+function shotMakeProbability(shotError, P) {
+    const M = SHOT_MODEL;
+    const e = Math.abs(shotError);
+    if (e <= M.PERFECT) return P.ceiling;                          // dead-center: guaranteed
+    const x = (e - M.PERFECT) / P.width;                           // how many "widths" off the green
+    const decay = Math.exp(-Math.pow(x, M.makeShape));             // smooth 1 -> 0, no kinks
+    return M.floorMake + (P.ceiling - M.floorMake) * decay;
+}
 
 // "charge01" is 0–1 and represents how far through the shot meter the player released
 // "selectedShotType" is 'jumper', 'layup', or 'dunk' (decided by chooseShotType in game.js)
@@ -315,7 +393,12 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
     const shotDistance = dist(shooter, goal);  // distance from shooter to the hoop
     const dunk = selectedShotType === 'dunk';
     const layup = selectedShotType === 'layup';
-    const isThree = shotDistance > COURT.threeRadius + 1;  // true if shooter is behind the three-point line
+    // A shot is a three if it's beyond the arc OR out past the straight corner-three lines.
+    // The corners sit 22ft (≈95px) from center — closer to the rim than the 23.75ft arc — so a
+    // pure radius test wrongly scores corner threes as twos. cornerOffsetY mirrors the drawn court.
+    const cornerOffsetY = 22 * (COURT.bottom - COURT.top) / 50;
+    const isThree = Math.abs(shooter.y - COURT.centerY) >= cornerOffsetY
+                 || shotDistance > COURT.threeRadius + 1;  // true if shooter is behind the three-point line
     shooter.hasBall = false;
     state.pendingShot = null;
     shooter.pivotLocked = false;
@@ -441,44 +524,39 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
 
     */
     const absError = Math.abs(error);
-    // "slightWindow" is the margin around perfect where timing still counts as "on target".
-    // Dunks and layups are more forgiving than three-pointers.
-    const slightWindow = dunk ? SHOT_ODDS.dunkTimingWindow : layup ? SHOT_ODDS.layupTimingWindow : shotDistance < 70 ? SHOT_ODDS.closeJumpTimingWindow : isThree ? SHOT_ODDS.threePointTimingWindow : SHOT_ODDS.jumpTimingWindow;
-    const overshot = error > slightWindow;
-    const short = error < -slightWindow;
-    // severeMistime: 0 = slightly off, 1 = very badly timed.
-    const severeMistime = clamp((absError - (slightWindow + SHOT_ODDS.timingMistimeOffset)) / SHOT_ODDS.timingMistimeScale, 0, 1);
-    // timingScore: 1 = perfect, 0 = terrible timing.
-    const timingScore = 1 - clamp(absError / (slightWindow + SHOT_ODDS.timingScoreRange), 0, 1);
-    // movePenalty: moving fast while shooting reduces make chance.
-    const movePenalty = clamp(Math.hypot(shooter.vx, shooter.vy) / SHOT_ODDS.movePenaltySpeedDivisor, 0, SHOT_ODDS.movePenaltyMax);
 
-    // --- Make chance calculation ---
-    // "perfectBase" is how often this shot type goes in with perfect timing.
-    const perfectBase = dunk ? SHOT_ODDS.dunkPerfectMakeChance : layup ? SHOT_ODDS.layupPerfectMakeChance : shotDistance < 70 ? SHOT_ODDS.closeJumpPerfectMakeChance : isThree ? SHOT_ODDS.threePointPerfectMakeChance : SHOT_ODDS.jumpPerfectMakeChance;
-    // "onTargetMake" subtracts penalties from the perfect base.
-    const onTargetMake = clamp(perfectBase - SHOT_ODDS.missChanceOnPerfectShot - movePenalty * SHOT_ODDS.movePenaltyScale, SHOT_ODDS.perfectOnTargetMin, SHOT_ODDS.makeChanceMaxDunk);
-    let makeChance;
-    if (dunk) {
-        // Dunks always go in.
-        makeChance = SHOT_ODDS.dunkPerfectMakeChance;
-    } else if (layup) {
-        // Layup make chance drops off the worse the timing is.
-        const layupFalloff = clamp((absError - slightWindow) / SHOT_ODDS.layupFalloffRange, 0, 1);
-        makeChance = clamp(onTargetMake - layupFalloff * SHOT_ODDS.layupFalloffPenalty, SHOT_ODDS.layupMinMakeChance, SHOT_ODDS.layupMaxMakeChance);
-    } else {
-        // Jumpers: timing error reduces make chance sharply; a "bailout" chance
-        // (SHOT_ODDS.luckyMakeChanceOnBadShot) lets badly-timed shots still occasionally go in.
-        const falloffRange = shotDistance < 70 ? SHOT_ODDS.closeShotFalloffRange : isThree ? SHOT_ODDS.threePointFalloffRange : SHOT_ODDS.normalShotFalloffRange;
-        const offSeverity = clamp((absError - slightWindow) / falloffRange, 0, 1);
-        const sharpFalloff = offSeverity * offSeverity;
-        const bailout = SHOT_ODDS.luckyMakeChanceOnBadShot * (isThree ? SHOT_ODDS.threePointBailoutScale : shotDistance < 70 ? SHOT_ODDS.closeShotBailoutScale : SHOT_ODDS.normalShotBailoutScale);
-        makeChance = clamp(onTargetMake * (1 - sharpFalloff) + bailout * sharpFalloff, SHOT_ODDS.makeChanceMin, SHOT_ODDS.makeChanceMax);
+    // --- Make chance: the 2K-style two-stage model (see SHOT_MODEL in config.js) ---
+    // STAGE 1: describe the shot from its distance, contest, movement and type.
+    const contest01 = clamp(state.lastContest / 100, 0, 1);                 // contestFromDistance is 0..100
+    const moveFrac  = clamp(Math.hypot(shooter.vx, shooter.vy) / GAME.sprintSpeed, 0, 1);
+    const modelType = dunk ? 'dunk' : layup ? 'layup' : isFloater ? 'floater' : 'jumpShot';
+    const P = shotParameters(shotDistance, contest01, moveFrac, modelType);
+    // STAGE 2: turn the release timing into a make %.
+    let makeChance = shotMakeProbability(error, P);
+    // overshot / short drive the visual shot-style + landing-spot logic below.
+    const overshot = error >  P.goodHalf;
+    const short    = error < -P.goodHalf;
+
+    // STAGE 3: defender block (only while they're mid block-lunge). Near the rim a block
+    // barely dents the make but can swat it outright; far out it can't reach to swat but it
+    // pressures the make down. Both scale with contest and how mistimed the shot was.
+    let blocked = false;
+    let blockChance = 0;
+    if (blocking) {
+        const B = SHOT_MODEL.block;
+        const nearFactor = clamp(1 - shotDistance / B.fadeDist, 0, 1);              // 1 at the rim -> 0 past fadeDist
+        const vuln = lerp(B.vulnFloor, 1, clamp(absError / B.vulnRange, 0, 1));     // clean greens resist the swat
+        blockChance = B.maxBlockChance * nearFactor * contest01 * vuln;             // high near rim, ~0 far
+        const makeReduction = B.maxMakeReduction * (1 - nearFactor) * contest01 * vuln; // grows with distance
+        makeChance *= (1 - makeReduction);
+        blocked = Math.random() < blockChance;
     }
-    // Add a small random jitter so identical shots don't always have the same result.
-    makeChance = clamp(makeChance + rand(-SHOT_ODDS.makeNoiseVariance, SHOT_ODDS.makeNoiseVariance), SHOT_ODDS.makeChanceMin, dunk ? SHOT_ODDS.makeChanceMaxDunk : SHOT_ODDS.makeChanceMax);
+    state.lastBlockChance = blockChance;
+
     b.quality = makeChance;
-    b.make = Math.random() < makeChance;  // actually flip the coin
+    state.lastMakeChance = makeChance;                // for the HUD readout
+    b.make = !blocked && Math.random() < makeChance;  // a swat is always a miss
+    b.blocked = blocked;
     state.attempts += 1;
 
     
@@ -578,14 +656,37 @@ export function beginShot(state, shooter, charge01, selectedShotType = 'jumper')
         }
     }
 
+    // A swatted shot is a real knock-away: the ball is flung loose from the block point,
+    // away from both the rim and the defender's hand, with an upward pop — players scramble.
+    if (blocked) {
+        const B = SHOT_MODEL.block;
+        // Swat direction: away from the defender's reach, biased away from the basket.
+        const swipe = normalize((shooter.x - def.x) + (shooter.x - hoopX) * 0.6,
+                                (shooter.y - def.y) + (shooter.y - hoopY) * 0.6);
+        let baseAngle = (swipe.x === 0 && swipe.y === 0)
+            ? Math.atan2(0, Math.sign(shooter.x - hoopX) || 1)
+            : Math.atan2(swipe.y, swipe.x);
+        baseAngle += rand(-B.knockSpread, B.knockSpread);
+        const speed = rand(B.knockSpeedMin, B.knockSpeedMax);
+        const vx = Math.cos(baseAngle) * speed;
+        const vy = Math.sin(baseAngle) * speed;
+        const vz = rand(B.knockUpMin, B.knockUpMax);
+        // Contact point: up at the shot, nudged toward the defender's hand.
+        const cx = shooter.x + (def.x - shooter.x) * 0.25;
+        const cy = shooter.y - 6 + (def.y - shooter.y) * 0.25;
+        state.streak = 0;
+        state.screenShake = Math.max(state.screenShake, 0.6);
+        beginLooseBall(state, cx, cy, 20, vx, vy, vz);
+    }
+
     // Show the timing feedback banner at the top of the screen.
-    if (dunk)        state.message = { text: 'HAMMER!', ttl: 0.8 };
+    if (blocked)     state.message = { text: 'BLOCKED!', ttl: 0.85 };
+    else if (dunk)   state.message = { text: 'HAMMER!', ttl: 0.8 };
     else if (layup)  state.message = { text: 'LAYUP', ttl: 0.7 };
+    else if (absError <= SHOT_MODEL.PERFECT)  state.message = { text: 'GREEN', ttl: 0.75 };
+    else if (!overshot && !short)             state.message = { text: 'GOOD', ttl: 0.65 };  // still inside the green window
     else if (overshot) state.message = { text: 'STRONG', ttl: 0.55 };
-    else if (short)  state.message = { text: 'SHORT', ttl: 0.55 };
-    else if (absError <= slightWindow * 0.42) state.message = { text: 'GREEN', ttl: 0.75 };
-    else if (absError <= slightWindow)        state.message = { text: 'GOOD', ttl: 0.65 };
-    else                                      state.message = { text: 'OFF TIMING', ttl: 0.65 };
+    else             state.message = { text: 'SHORT', ttl: 0.55 };
 }
 
 // Drops the ball onto the floor as a loose, physics-simulated object.
@@ -662,7 +763,7 @@ function updateHeldBall(state) {
     if (!holder) return;
     // charge is 0–1: how far through the shot charge the player is.
     const charge = state.shotCharge?.playerId === holder.id
-        ? clamp(state.shotCharge.elapsed / GAME.maxChargeTime, 0, 1)
+        ? clamp(state.shotCharge.elapsed / (state.shotCharge.fillTime || GAME.maxChargeTime), 0, 1)
         : 0;
     const dir = holder.facingX >= 0 ? 1 : -1;
     const speed = Math.hypot(holder.vx, holder.vy);

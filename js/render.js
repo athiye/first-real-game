@@ -305,7 +305,7 @@ export class Renderer {
         text('COOL GAME', 133, 19, COLORS.white, 8);
         text(`STK ${state.streak}`, 229, 19, COLORS.white, 8);
         const pct = state.attempts === 0 ? 0 : Math.round((state.makes / state.attempts) * 100);
-        text(`DIST ${Math.round(state.shotDist)} px`, 305, 19, COLORS.white, 7);
+        text(`MAKE% ${Math.round(state.lastMakeChance * 100)}`, 305, 19, COLORS.white, 7);
         text(`SHOT ERROR  ${state.lastShotError}`, 384, 19, COLORS.white, 6);
         text(`CONTEST ${Math.round(state.lastContest)}%`, 467, 19, COLORS.white, 8); 
         rect(146, 26, 72, 3, COLORS.hudBlue2);
@@ -389,7 +389,7 @@ export class Renderer {
         const runWave2 = Math.sin(p.anim * 13 + Math.PI);
         const bounceWave = Math.sin(p.anim * 8);
         const charge  = state.shotCharge?.playerId === p.id
-            ? clamp(state.shotCharge.elapsed / GAME.maxChargeTime, 0, 1)
+            ? clamp(state.shotCharge.elapsed / (state.shotCharge.fillTime || GAME.maxChargeTime), 0, 1)
             : 0;
         const actionT = p.actionDuration <= 0 ? 1 : clamp(p.actionElapsed / p.actionDuration, 0, 1);
         const skin = this.skin(p.skin);
