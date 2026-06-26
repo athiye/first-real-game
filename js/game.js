@@ -64,6 +64,8 @@ function createInitialState() {
             hasBall: i === 0,    // PG starts with the ball
             stamina: 1,          // 0–1; drives lose stamina, standing still restores it
             pivotLocked: false,  // true after a drive ends — player must pass or shoot
+            pumpStep: 0,         // stepback token: 0 = available, 1 = armed by a gathered pump fake, 2 = spent
+            hasDribbled: false,  // false right after getting the ball until they first move (started their dribble)
             driveTimer: 0,       // counts down while a drive is active
             homeX: spot.x,       // the default position this player returns to between plays
             homeY: spot.y,
@@ -74,7 +76,7 @@ function createInitialState() {
             hair: (i % 4),       // visual hair style index
             heightClass: (role === 'C' ? 2 : role === 'PF' ? 1 : 0), // 0=short, 1=medium, 2=tall
             anim: rand(0, 2),    // offset so players' dribble bounces aren't all in sync
-            animState: i === 0 ? 'dribble' : 'idle',
+            animState: 'idle',   // holding the ball but not dribbling yet (idle until they first move)
             actionElapsed: 0,    // how long the current animation has been playing
             actionDuration: 0.01,
             cooldowns: makeCooldowns()
@@ -247,6 +249,8 @@ function handleControls(dt) {
     const charging = state.shotCharge?.playerId === p.id;
     const pending  = state.pendingShot?.playerId === p.id;
     const driving  = p.hasBall && p.driveTimer > 0;
+    // The moment they move/drive with the ball, they've started their dribble (used it).
+    if (p.hasBall && !p.pivotLocked && !charging && !pending && (moving || driving)) p.hasDribbled = true;
     const pickedUp = p.hasBall && p.pivotLocked; // pivot locked = drive has ended, must pass/shoot
     const toRim    = normalize(rim().x - p.x, rim().y - p.y);
     const vel      = normalize(p.vx, p.vy);
@@ -385,7 +389,7 @@ function handleControls(dt) {
 
     // Set idle/dribble/run animation when no special action is playing.
     if (p.actionElapsed >= p.actionDuration && !charging && !pending && !driving) {
-        if (p.hasBall) p.animState = 'dribble';
+        if (p.hasBall) p.animState = p.hasDribbled ? 'dribble' : 'idle';
         else           p.animState = moving ? 'run' : 'idle';
     }
     if (p.hasBall) handleBallControls(p, dt);
@@ -528,6 +532,22 @@ function handleBallControls(p, dt) {
         if (input.justReleased('shoot') || chargeState.elapsed >= fill) {
             const charge = chargeState.elapsed / fill; // 0–1 release timing
             state.shotCharge = null;
+            if (charge - GAME.greenCenter <= GAME.pumpFakeError) {
+                // Released way too early -> PUMP FAKE: shot motion, but the ball is never let go and
+                // it doesn't count as an attempt. If the player has already started their dribble, the
+                // fake commits them: they're locked (shoot only) with a single stepback (armed here).
+                // The only exception is just catching the ball and never moving — they stay free to dribble.
+                if (p.hasDribbled) {
+                    p.pivotLocked = true;
+                    if (p.pumpStep === 0) p.pumpStep = 1;
+                }
+                p.fakeCharge = charge;              // remember the gather height so the ball lowers smoothly
+                p.vx *= 0.4; p.vy *= 0.4;           // plant a little for the fake
+                p.cooldowns.shoot = 0;              // no lockout — pump fake into an instant shot is allowed
+                startAction(p, 'pumpfake', GAME.pumpFakeHold + GAME.pumpFakeDown);
+                state.message = { text: 'PUMP FAKE', ttl: 0.5 };
+                return;
+            }
             beginShot(state, p, charge, chargeState.shotType);
             return;
         }
@@ -542,8 +562,13 @@ function handleBallControls(p, dt) {
     // --- Stepback button ---
     // Explodes the player away from the hoop, locks the pivot immediately (they've
     // gathered), and leaves them in a good position for a pull-up jump shot.
-    if (input.justPressed('stepback') && !locked && !driving && p.cooldowns.stepback <= 0) {
+    // Allowed from a live handler (pumpStep 0, not yet locked) OR when a gathered pump fake has
+    // armed it (pumpStep 1, even though locked). Either way the move is then spent (pumpStep 2),
+    // so after a stepback you can only shoot.
+    const canStepback = (p.pumpStep === 0 && !locked) || p.pumpStep === 1;
+    if (input.justPressed('stepback') && canStepback && !driving && p.cooldowns.stepback <= 0) {
         p.cooldowns.stepback = 0.72;
+        p.pumpStep = 2;
         const away = normalize(p.x - COURT.rim.x, p.y - COURT.rim.y); // direction away from hoop
         p.vx += away.x * GAME.stepbackForce;
         p.vy += away.y * GAME.stepbackForce;

@@ -133,11 +133,13 @@ export function resetTraining(state, message = 'COOL GAME') {
         p.cutTimer = rand(0.8, 2.4);
         p.stamina = 1;
         p.pivotLocked = false;
+        p.pumpStep = 0;
+        p.hasDribbled = false;
         p.driveTimer = 0;
         // Only the point guard is controlled by the player
         p.controlled = p.role === 'PG';
         p.hasBall = p.role === 'PG';
-        p.animState = p.hasBall ? 'dribble' : 'idle';
+        p.animState = 'idle';    // ball handler starts holding the ball, not dribbling
         p.actionElapsed = 0;
         p.actionDuration = 0.01;
         p.cooldowns = { shoot: 0, pass: 0, stepback: 0 };
@@ -215,6 +217,8 @@ export function handBallTo(state, receiver, showMessage = 'CATCH') {
     receiver.hasBall = true;
     receiver.controlled = true;
     receiver.pivotLocked = false;
+    receiver.pumpStep = 0;       // fresh possession -> stepback token refreshed
+    receiver.hasDribbled = false; // hasn't started a dribble yet (idle hold; can fake & still dribble)
     receiver.driveTimer = 0;
     receiver.animState = 'catch';
     receiver.actionElapsed = 0;
@@ -783,6 +787,27 @@ function updateHeldBall(state) {
         b.x = holder.x + dir * 5.5;
         b.y = holder.y - 12;
         b.z = 13;
+        return;
+    }
+    if (holder.animState === 'pumpfake') {
+        // Hangs at the top of the gather for pumpFakeHold, then drops back to the hold over
+        // pumpFakeDown — both tunable. Kept in the hands the whole time (it never leaves them).
+        const el = holder.actionElapsed;
+        const descend = el <= GAME.pumpFakeHold
+            ? 0
+            : clamp((el - GAME.pumpFakeHold) / Math.max(0.001, GAME.pumpFakeDown), 0, 1);
+        const fc = holder.fakeCharge ?? 0;
+        // top of the gather (matches where the charge left the ball) -> resting hold
+        b.x = lerp(holder.x + dir * (5 + fc * 3), holder.x + dir * 5,   descend);
+        b.y = lerp(holder.y - 13 - fc * 5,        holder.y - 4,         descend);
+        b.z = lerp(10 + fc * 10,                  GAME.idleHoldHeight,  descend);
+        return;
+    }
+    if (holder.animState === 'idle') {
+        // Holding the ball but not dribbling yet — tucked in front at an adjustable height, no bounce.
+        b.x = holder.x + dir * 5;
+        b.y = holder.y - 4;
+        b.z = GAME.idleHoldHeight;
         return;
     }
     if (holder.animState === 'catch') {

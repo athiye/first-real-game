@@ -69,6 +69,10 @@ export const GAME = {
     // Shooting: you hold the shoot key to fill a meter, then release.
     maxChargeTime: 0.3,    // seconds for the shot meter to fill completely
     greenCenter: 0.73,      // the meter position (0..1) of a PERFECT release
+    pumpFakeError: -0.25,   // release at least this early (shotError ≤ this) = a pump fake, not a real shot
+    pumpFakeHold: 0.01,     // seconds the ball hangs at the top of a pump fake before it drops
+    pumpFakeDown: 0.05,     // seconds for the ball to drop from the top of the fake back to a hold
+    idleHoldHeight: 1,      // how high the ball sits while just holding it (before dribbling); higher = higher
 
     // Passing.
     passDurationMin: 0.15,  // shortest possible pass flight time (idk AI did this)

@@ -431,8 +431,11 @@ export class Renderer {
                 torsoLean = dir * 2;
             } else {
                 armRaise = Math.round(lerp(4, 8, charge));
-                const lift = Math.sin(Math.PI * clamp(charge * 0.9, 0, 1));
-                jump = 2 + Math.round(lift * 5);
+                // Feet only leave the ground once the meter is past the pump-fake window (so it's
+                // locked in as a real shot); before that the player just gathers — a fake never jumps.
+                const realStart = GAME.greenCenter + GAME.pumpFakeError;
+                const realT = clamp((charge - realStart) / (1 - realStart), 0, 1);
+                jump = Math.round(realT * 6);
                 torsoLean = dir;
             }
             footL = 0;
@@ -454,6 +457,16 @@ export class Renderer {
         } else if (p.animState === 'shoot') {
             armRaise = 6;
             jump = Math.round(Math.sin(actionT * Math.PI) * 3);
+            footL = 0;
+            footR = 0;
+        } else if (p.animState === 'pumpfake') {
+            // Arm holds up at the top, then lowers — same hold/drop timing as the ball.
+            const descend = p.actionElapsed <= GAME.pumpFakeHold
+                ? 0
+                : clamp((p.actionElapsed - GAME.pumpFakeHold) / Math.max(0.001, GAME.pumpFakeDown), 0, 1);
+            armRaise = Math.round((1 - descend) * 7); // arm comes back down from the gather (no second pump)
+            jump = 0;                                  // a fake never leaves the ground
+            torsoLean = dir;
             footL = 0;
             footR = 0;
         } else if (p.animState === 'layup') {
